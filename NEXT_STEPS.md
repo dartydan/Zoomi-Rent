@@ -51,12 +51,29 @@ npm run dev
 
 ## 5. Configure Clerk for Production
 
-1. In Clerk Dashboard → **Domains**, add your Vercel domain (e.g. `zoomi-rent.vercel.app`)
-2. Add your custom domain when you have one
+1. In Clerk Dashboard, switch to your **production** instance (dropdown at top).
+2. Go to **Domains** and add the exact domain your app runs on (e.g. `your-app.vercel.app` or your custom domain).
+3. Clerk may require a **custom domain** for production; `*.vercel.app` is not always allowed. See [Clerk production deployment](https://clerk.com/docs/deployments/overview).
+4. Add your custom domain when you have one.
 
 ---
 
-## 6. Link Existing Customers (Optional)
+## 6. Troubleshooting 500 Errors (Production)
+
+If you see a 500 after switching to production Clerk keys:
+
+1. **Check Vercel logs**  
+   Vercel → your project → **Logs** (or **Deployments** → select deployment → **Functions**). Look for lines like `Stripe customer error:` or `Stripe invoices error:` — the message after the colon is the real error.
+
+2. **Clerk domain**  
+   Your deployment URL must be added in Clerk Dashboard → **Domains** for the **production** instance. Wrong or missing domain often causes auth to fail and APIs to return 500.
+
+3. **Stripe keys**  
+   In Vercel env vars, use Stripe **live** keys if you want live data, or **test** keys for testing. Missing or invalid `STRIPE_SECRET_KEY` will cause 500s from `/api/stripe/*`.
+
+---
+
+## 7. Link Existing Customers
 
 If you already have Stripe customers:
 

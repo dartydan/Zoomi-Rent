@@ -46,7 +46,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ invoices: formattedInvoices });
   } catch (error) {
-    console.error("Stripe invoices error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Stripe invoices error:", message, error);
     return NextResponse.json(
       { error: "Failed to fetch invoices" },
       { status: 500 }

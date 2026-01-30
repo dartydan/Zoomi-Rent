@@ -46,7 +46,8 @@ export async function GET() {
       email: customer.email,
     });
   } catch (error) {
-    console.error("Stripe customer error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Stripe customer error:", message, error);
     return NextResponse.json(
       { error: "Failed to get or create customer" },
       { status: 500 }

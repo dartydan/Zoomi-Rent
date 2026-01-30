@@ -43,7 +43,8 @@ export async function GET(request: Request) {
       hasActiveSubscription: !!subscription,
     });
   } catch (error) {
-    console.error("Stripe subscription error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Stripe subscription error:", message, error);
     return NextResponse.json(
       { error: "Failed to fetch subscription" },
       { status: 500 }

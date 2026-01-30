@@ -7,16 +7,24 @@ export const metadata: Metadata = {
   description: "Manage your washer and dryer rental",
 };
 
+const hasClerkKey = !!(
+  typeof process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY === "string" &&
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.trim()
+);
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className="antialiased">{children}</body>
-      </html>
-    </ClerkProvider>
+  const content = (
+    <html lang="en">
+      <body className="antialiased">{children}</body>
+    </html>
   );
+
+  if (hasClerkKey) {
+    return <ClerkProvider>{content}</ClerkProvider>;
+  }
+  return content;
 }

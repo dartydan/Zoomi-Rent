@@ -1,23 +1,30 @@
 import Link from "next/link";
+import { GoogleCalendarSchedulingButton } from "./GoogleCalendarSchedulingButton";
 
 export function SplashHero() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-slate-800 px-4">
-      <div className="max-w-2xl mx-auto text-center">
-        <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight mb-4">
-          Zoomi Rent
+    <section className="relative px-4 py-16 sm:py-24">
+      <div className="mx-auto max-w-3xl text-center">
+        <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl">
+          Washer & Dryer Rental Made Simple
         </h1>
-        <p className="text-xl text-slate-300 mb-8">
-          Washer & dryer rental made simple. Manage your account and billing in
-          one place.
+        <p className="mt-6 text-xl text-slate-300">
+          Professional units, one monthly payment. Manage your account and
+          billing in one place.
         </p>
-        <Link
-          href="/login"
-          className="inline-flex items-center justify-center px-8 py-4 text-lg font-medium text-slate-900 bg-white rounded-lg hover:bg-slate-100 transition-colors"
-        >
-          Customer Login
-        </Link>
+        <p className="mt-4 text-2xl font-semibold text-white">
+          Rentals starting at $60/mo
+        </p>
+        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <GoogleCalendarSchedulingButton />
+          <Link
+            href="/checklist"
+            className="inline-flex items-center justify-center rounded-lg border-2 border-white/30 bg-white/10 px-8 py-4 text-lg font-medium text-white transition-colors hover:bg-white/20"
+          >
+            Get Started
+          </Link>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
