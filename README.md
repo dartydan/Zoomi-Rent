@@ -1,6 +1,6 @@
-# Zoomi Rent Customer Portal
+# Zoomi Rentals Customer Portal
 
-A customer portal for Zoomi Rent washer and dryer rentals. Customers can view payment history, download PDF invoices, see their next payment date, manage billing via Stripe, and request to end services via email.
+A customer portal for Zoomi Rentals washer and dryer rentals. Customers can view payment history, download PDF invoices, see their next payment date, manage billing via Stripe, and request to end services via email.
 
 ## Setup
 

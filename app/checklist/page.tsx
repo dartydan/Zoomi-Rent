@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { GoogleCalendarSchedulingButton } from "@/components/GoogleCalendarSchedulingButton";
 import { MarketingHeader } from "@/components/MarketingHeader";
+import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "What to Expect | Zoomi Rent",
+  title: "What to Expect | Zoomi Rentals",
   description:
-    "See how easy it is to get started with Zoomi Rent: book your install, we deliver and set up, then you manage everything in one place.",
+    "See how easy it is to get started with Zoomi Rentals: book your install, we deliver and set up, then you manage everything in one place.",
 };
 
 const steps = [
@@ -38,51 +38,37 @@ const steps = [
 
 export default function ChecklistPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
+    <div className="min-h-screen bg-background">
       <MarketingHeader variant="checklist" />
-      <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-bold text-white sm:text-4xl">
-          What to Expect
-        </h1>
-        <p className="mt-4 text-lg text-slate-300">
-          Here’s how the process works from booking to billing.
-        </p>
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold text-foreground sm:text-3xl">
+            What to Expect
+          </h1>
+          <p className="text-base text-muted-foreground">
+            How the process works from booking to billing.
+          </p>
+        </div>
 
-        <ol className="mt-12 space-y-10">
+        <ol className="mt-10 space-y-8" aria-label="Process steps">
           {steps.map((step) => (
             <li key={step.number} className="relative pl-10">
-              <span className="absolute left-0 flex h-8 w-8 items-center justify-center rounded-full bg-slate-700 text-sm font-bold text-white">
+              <span className="absolute left-0 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground" aria-hidden>
                 {step.number}
               </span>
-              <h2 className="text-xl font-semibold text-white">{step.title}</h2>
-              <p className="mt-2 text-slate-300">{step.description}</p>
-              {step.number === 1 && (
-                <div className="mt-4">
-                  <GoogleCalendarSchedulingButton />
-                </div>
-              )}
+              <h2 className="text-base font-semibold text-foreground">
+                {step.title}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">{step.description}</p>
             </li>
           ))}
         </ol>
 
-        <div className="mt-14 rounded-lg border border-slate-700/50 bg-slate-800/50 p-6">
-          <h2 className="text-lg font-semibold text-white">
-            Ready to schedule your install?
-          </h2>
-          <p className="mt-2 text-slate-300">
-            Book an appointment below. Questions? We’re happy to help when we
-            connect.
-          </p>
-          <div className="mt-4">
-            <GoogleCalendarSchedulingButton />
-          </div>
-        </div>
-
-        <p className="mt-10 text-center text-sm text-slate-400">
-          Already a customer?{" "}
-          <Link href="/login" className="text-white underline hover:no-underline">
-            Customer Login
-          </Link>
+        <p className="mt-12 flex flex-wrap items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+          <span>Already a customer?</span>
+          <Button variant="link" size="default" className="min-h-[44px] shrink-0" asChild>
+            <Link href="/login">Customer Login</Link>
+          </Button>
         </p>
       </main>
     </div>

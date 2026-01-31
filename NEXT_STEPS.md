@@ -1,4 +1,4 @@
-# Zoomi Rent – Next Steps
+# Zoomi Rentals – Next Steps
 
 Your credentials are configured. Here’s what to do next.
 
@@ -23,19 +23,30 @@ Your credentials are configured. Here’s what to do next.
 
 ---
 
-## 3. Test Locally
+## 3. Admin accounts
+
+Admins can update install info (install date, address, notes, photo URLs) for any user.
+
+1. **Make a user an admin:** In [Clerk Dashboard](https://dashboard.clerk.com) → **Users** → select a user → **Public metadata** → add `"role": "admin"` (JSON). Save.
+2. **Access admin:** When signed in as that user, the dashboard sidebar shows **Admin**. Go to **Admin** to list users and click **Edit install** to set install date, address, notes, and photo URLs (one URL per line).
+3. **Photo URLs:** Paste image URLs (e.g. from an image host or storage). For file uploads you’d add a separate upload flow (e.g. Vercel Blob) and then paste the resulting URLs here.
+
+---
+
+## 4. Test Locally
 
 ```bash
 npm run dev
 ```
 
 - Open http://localhost:3000
+- **To use Customer Login and the dashboard locally:** add your Clerk and Stripe keys to `.env.local` (see the file for variable names). Without them, the marketing pages and checklist work, but login and `/dashboard` will not.
 - Click **Customer Login** → enter your email → check for the magic link
 - After login, you should see the dashboard (empty if no Stripe customer/subscription yet)
 
 ---
 
-## 4. Deploy to Vercel
+## 5. Deploy to Vercel
 
 1. Push the project to GitHub (if not already)
 2. Go to [vercel.com](https://vercel.com) → **Add New Project** → import your repo
@@ -49,7 +60,7 @@ npm run dev
 
 ---
 
-## 5. Configure Clerk for Production
+## 6. Configure Clerk for Production
 
 1. In Clerk Dashboard, switch to your **production** instance (dropdown at top).
 2. Go to **Domains** and add the exact domain your app runs on (e.g. `your-app.vercel.app` or your custom domain).
@@ -58,7 +69,7 @@ npm run dev
 
 ---
 
-## 6. Troubleshooting 500 Errors (Production)
+## 7. Troubleshooting 500 Errors (Production)
 
 If you see a 500 after switching to production Clerk keys:
 
@@ -73,7 +84,7 @@ If you see a 500 after switching to production Clerk keys:
 
 ---
 
-## 7. Link Existing Customers
+## 8. Link Existing Customers
 
 If you already have Stripe customers:
 

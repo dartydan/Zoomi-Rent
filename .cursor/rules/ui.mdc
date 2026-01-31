@@ -1,0 +1,16 @@
+---
+description: UI implementation constraints — shadcn + Tailwind only, design tokens, accessible, no new variants without asking
+alwaysApply: true
+---
+
+# UI Implementation Rules
+
+When implementing UI in this project:
+
+- **Implement, don't design.** Build what's specified; don't invent new layouts or visual treatments.
+- **Use shadcn/ui components and Tailwind only.** No custom component libraries or one-off styled divs where a shadcn component exists.
+- **Follow existing design tokens.** Use theme variables already in `app/globals.css` (colors, radius, etc.). Do not add new tokens.
+- **Prefer simple, dense, boring UI.** Minimal decoration, compact layouts.
+- **No new colors, gradients, or animations.** Stick to the existing palette; avoid gradients and decorative motion.
+- **Accessibility first.** Semantic HTML, visible focus states, ARIA where needed, keyboard and screen-reader friendly.
+- **Ask before introducing new variants.** Do not add new Button/Card/input variants or similar without explicit approval.
