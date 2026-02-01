@@ -41,10 +41,10 @@ Features:
 **Component**: `PricingCalculator.tsx`
 
 Features:
-- 3 pricing tiers: Basic ($60), Premium ($85), Deluxe ($110)
+- 3 pricing tiers: Standard ($60), Plus ($85), Deluxe ($110)
 - Duration selector: 6, 12, or 24 months
 - Visual plan comparison with feature lists
-- "Most Popular" badge on Premium plan
+- "Most Popular" badge on Plus plan
 - Click to select plans with visual feedback
 - Live total cost calculation
 - Hover animations with scale effects

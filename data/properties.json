@@ -5,7 +5,18 @@
     "purchaseCost": 200,
     "revenueGenerated": 0,
     "createdAt": "2026-01-31T22:32:13.744Z",
-    "updatedAt": "2026-01-31T23:10:43.518Z",
-    "assignedUserId": "user_392d72w6STIlshkgFBHG6uCV8hd"
+    "updatedAt": "2026-02-01T07:13:39.064Z",
+    "assignedUserId": "user_38uryi2rcb7oHXcAaIjgDF8Sjgp",
+    "unitType": "Washer"
+  },
+  {
+    "id": "e36f5ced-f6ad-4e59-852f-e91d84830e05",
+    "model": "Dryer Demo",
+    "unitType": "Dryer",
+    "purchaseCost": 100,
+    "revenueGenerated": 0,
+    "createdAt": "2026-02-01T07:45:31.345Z",
+    "updatedAt": "2026-02-01T07:45:40.883Z",
+    "assignedUserId": "user_38uryi2rcb7oHXcAaIjgDF8Sjgp"
   }
 ]

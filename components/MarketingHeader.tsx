@@ -152,26 +152,40 @@ export function MarketingHeader({ variant = "default" }: MarketingHeaderProps) {
           ) : (
             <>
               {!isSignedIn && (
-                <Button variant="default" size="default" className="hover:scale-105 transition-transform" onClick={() => openGetStarted()}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative h-9 w-9 shrink-0"
+                  onClick={() => setTheme(isDark ? "light" : "dark")}
+                  aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                >
+                  <Sun className="h-4 w-4 scale-0 transition-all dark:scale-100" />
+                  <Moon className="absolute h-4 w-4 scale-100 transition-all dark:scale-0" />
+                </Button>
+              )}
+              {!isSignedIn && (
+                <Button variant="default" size="default" className="min-w-[110px] hover:scale-105 transition-transform" onClick={() => openGetStarted()}>
                   Get Started
                 </Button>
               )}
-              <Button
-            variant="ghost"
-            size="icon"
-            className="relative h-9 w-9 shrink-0"
-            onClick={() => setTheme(isDark ? "light" : "dark")}
-            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            <Sun className="h-4 w-4 scale-0 transition-all dark:scale-100" />
-            <Moon className="absolute h-4 w-4 scale-100 transition-all dark:scale-0" />
-          </Button>
-          {isSignedIn ? (
+              {isSignedIn && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative h-9 w-9 shrink-0"
+                  onClick={() => setTheme(isDark ? "light" : "dark")}
+                  aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                >
+                  <Sun className="h-4 w-4 scale-0 transition-all dark:scale-100" />
+                  <Moon className="absolute h-4 w-4 scale-100 transition-all dark:scale-0" />
+                </Button>
+              )}
+              {isSignedIn ? (
             <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => signOut({ redirectUrl: "/" })} aria-label="Log out">
               <LogOut className="h-4 w-4" />
             </Button>
           ) : (
-            <Button variant="default" size="default" className="bg-foreground text-background hover:bg-foreground/90" asChild>
+            <Button variant="default" size="default" className="min-w-[110px] bg-foreground text-background hover:bg-foreground/90" asChild>
               <Link href="/login">Login</Link>
             </Button>
           )}

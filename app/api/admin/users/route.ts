@@ -31,7 +31,17 @@ export async function GET() {
       users.map(async (u) => {
         const install = (u.publicMetadata?.install ?? {}) as { installDate?: string; installAddress?: string };
         const customerProfile = (u.publicMetadata?.customerProfile ?? {}) as Record<string, unknown>;
-        const stripeCustomerId = (u.publicMetadata?.stripeCustomerId as string) ?? null;
+        let stripeCustomerId = (u.publicMetadata?.stripeCustomerId as string)?.trim() || null;
+
+        if (stripe && !stripeCustomerId) {
+          const email = u.emailAddresses?.[0]?.emailAddress;
+          if (email) {
+            const customerList = await stripe.customers.list({ email, limit: 1 });
+            if (customerList.data.length > 0 && !customerList.data[0].deleted) {
+              stripeCustomerId = customerList.data[0].id;
+            }
+          }
+        }
 
         let hasDefaultPaymentMethod = false;
         if (stripe && stripeCustomerId) {

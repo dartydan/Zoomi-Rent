@@ -1,16 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink } from "lucide-react";
+import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink, Wrench, CreditCard, CalendarClock, Plus } from "lucide-react";
 import type { InstallInfo } from "@/lib/install";
+import type { Property } from "@/lib/property";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type CustomerProfile = {
   firstName?: string;
@@ -79,6 +86,29 @@ export default function AdminUserInstallPage() {
   const [existingContractUrls, setExistingContractUrls] = useState<string[]>([]);
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile>(null);
   const [lifetimeValue, setLifetimeValue] = useState<number>(0);
+  type TimelineData = {
+    installDate: string | null;
+    payments: { date: string; amount: number; currency: string }[];
+    nextPaymentDate: string | null;
+    nextPaymentAmount: number | null;
+    nextPaymentCurrency: string;
+  };
+  const [timeline, setTimeline] = useState<TimelineData | null>(null);
+  const [assignedProperties, setAssignedProperties] = useState<Property[]>([]);
+  const [propertyDialogId, setPropertyDialogId] = useState<string | null>(null);
+  const [propertyDialogData, setPropertyDialogData] = useState<Property | null>(null);
+  const [uninstallLoading, setUninstallLoading] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [editedNameValue, setEditedNameValue] = useState("");
+  const [nameClickCaretIndex, setNameClickCaretIndex] = useState(0);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const [savingName, setSavingName] = useState(false);
+  const [editingContactField, setEditingContactField] = useState<"email" | "phone" | "address" | null>(null);
+  const [editingContactValue, setEditingContactValue] = useState("");
+  const [contactClickCaretIndex, setContactClickCaretIndex] = useState(0);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+  const addressInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +141,119 @@ export default function AdminUserInstallPage() {
       cancelled = true;
     };
   }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    const empty: TimelineData = {
+      installDate: null,
+      payments: [],
+      nextPaymentDate: null,
+      nextPaymentAmount: null,
+      nextPaymentCurrency: "usd",
+    };
+    fetch(`/api/admin/users/${userId}/timeline`)
+      .then((res) => {
+        if (!res.ok) return empty;
+        return res.json() as Promise<TimelineData>;
+      })
+      .then((json) => {
+        if (cancelled) return;
+        setTimeline({
+          installDate: json.installDate ?? null,
+          payments: Array.isArray(json.payments) ? json.payments : [],
+          nextPaymentDate: json.nextPaymentDate ?? null,
+          nextPaymentAmount: json.nextPaymentAmount ?? null,
+          nextPaymentCurrency: json.nextPaymentCurrency ?? "usd",
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setTimeline(empty);
+      });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    fetch("/api/admin/property")
+      .then((res) => (res.ok ? res.json() : Promise.resolve({ properties: [] })))
+      .then((json: { properties: Property[] }) => {
+        if (!cancelled && json.properties)
+          setAssignedProperties(json.properties.filter((p) => p.assignedUserId === userId));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!propertyDialogId) {
+      setPropertyDialogData(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/admin/property/${propertyDialogId}`)
+      .then((res) => (res.ok ? res.json() : Promise.resolve(null)))
+      .then((json: Property | null) => {
+        if (!cancelled) setPropertyDialogData(json);
+      })
+      .catch(() => {
+        if (!cancelled) setPropertyDialogData(null);
+      });
+    return () => { cancelled = true; };
+  }, [propertyDialogId]);
+
+  async function refetchAssignedProperties() {
+    const res = await fetch("/api/admin/property");
+    const json = (await res.json()) as { properties?: Property[] };
+    if (json.properties) setAssignedProperties(json.properties.filter((p) => p.assignedUserId === userId));
+  }
+
+  async function handleUninstall(propertyId: string) {
+    setUninstallLoading(true);
+    try {
+      const res = await fetch(`/api/admin/property/${propertyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignedUserId: null }),
+      });
+      if (!res.ok) throw new Error("Failed to uninstall");
+      setPropertyDialogId(null);
+      setPropertyDialogData(null);
+      await refetchAssignedProperties();
+    } catch {
+      setUninstallLoading(false);
+    } finally {
+      setUninstallLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!editingName || !nameInputRef.current) return;
+    const input = nameInputRef.current;
+    const idx = nameClickCaretIndex;
+    const id = requestAnimationFrame(() => {
+      input.setSelectionRange(idx, idx);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [editingName, nameClickCaretIndex]);
+
+  useEffect(() => {
+    const ref =
+      editingContactField === "email"
+        ? emailInputRef.current
+        : editingContactField === "phone"
+          ? phoneInputRef.current
+          : editingContactField === "address"
+            ? addressInputRef.current
+            : null;
+    if (!editingContactField || !ref) return;
+    const idx = contactClickCaretIndex;
+    const id = requestAnimationFrame(() => {
+      ref.setSelectionRange(idx, idx);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [editingContactField, contactClickCaretIndex]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -213,10 +356,14 @@ export default function AdminUserInstallPage() {
     setExistingContractUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const displayName =
-    customerProfile?.firstName && customerProfile?.lastName
-      ? `${customerProfile.firstName} ${customerProfile.lastName}`
-      : "Customer Details";
+  function formatFirstNameLastName(first: string | undefined, last: string | undefined): string {
+    const parts = [first, last].filter(Boolean).map((s) => (s ?? "").trim()).filter(Boolean);
+    if (parts.length === 0) return "Customer";
+    return parts
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(" ");
+  }
+  const displayName = formatFirstNameLastName(customerProfile?.firstName, customerProfile?.lastName);
   const displayAddress = combineInstallAddress({
     street: installStreet,
     city: installCity,
@@ -224,8 +371,36 @@ export default function AdminUserInstallPage() {
     zip: installZip,
   });
 
+  function getCaretIndexFromClick(e: React.MouseEvent, maxIndex: number): number {
+    let index = maxIndex;
+    if (typeof document.caretPositionFromPoint === "function") {
+      const pos = document.caretPositionFromPoint(e.clientX, e.clientY);
+      if (pos?.offsetNode && typeof pos.offset === "number") index = pos.offset;
+    } else if ((document as unknown as { caretRangeFromPoint?(x: number, y: number): { startOffset: number } | null }).caretRangeFromPoint) {
+      const range = (document as unknown as { caretRangeFromPoint(x: number, y: number): { startOffset: number } | null }).caretRangeFromPoint(e.clientX, e.clientY);
+      if (range) index = range.startOffset;
+    }
+    return Math.max(0, Math.min(index, maxIndex));
+  }
+
+  function formatTimelineDate(iso: string) {
+    return new Date(iso).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }
+  function formatTimelineAmount(amount: number, currency: string) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+      minimumFractionDigits: 2,
+    }).format(amount);
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="flex gap-6 lg:flex-row flex-col">
+      <div className="flex-1 min-w-0 space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <Button
           variant="ghost"
@@ -236,9 +411,72 @@ export default function AdminUserInstallPage() {
           ← Back to Customers
         </Button>
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-bold text-foreground">
-            {loading ? "Customer Details" : displayName}
-          </h1>
+          {editingName ? (
+            <input
+              ref={nameInputRef}
+              type="text"
+              className="w-full min-w-[120px] max-w-full bg-transparent text-left text-2xl font-bold text-foreground rounded px-1 -mx-1 border-0 outline-none focus:outline-none focus:ring-0 cursor-text"
+              value={editedNameValue}
+              onChange={(e) => setEditedNameValue(e.target.value)}
+              onBlur={() => {
+                const trimmed = editedNameValue.trim();
+                if (!trimmed) {
+                  setEditingName(false);
+                  setEditedNameValue(displayName);
+                  return;
+                }
+                setSavingName(true);
+                const spaceIdx = trimmed.indexOf(" ");
+                const firstName = spaceIdx > 0 ? trimmed.slice(0, spaceIdx).trim() : trimmed;
+                const lastName = spaceIdx > 0 ? trimmed.slice(spaceIdx).trim() : "";
+                fetch(`/api/admin/users/${userId}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ firstName, lastName: lastName || undefined }),
+                })
+                  .then((res) => {
+                    if (res.ok) {
+                      setCustomerProfile((prev) => (prev ? { ...prev, firstName, lastName: lastName || prev.lastName } : { firstName, lastName }));
+                    }
+                  })
+                  .finally(() => {
+                    setEditingName(false);
+                    setSavingName(false);
+                    setEditedNameValue(trimmed);
+                  });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setEditingName(false);
+                  setEditedNameValue(displayName);
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              autoFocus
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                const display = loading ? "Customer" : displayName;
+                setEditedNameValue(display);
+                let index = display.length;
+                if (display && typeof document.caretPositionFromPoint === "function") {
+                  const pos = document.caretPositionFromPoint(e.clientX, e.clientY);
+                  if (pos?.offsetNode && typeof pos.offset === "number") index = pos.offset;
+                } else if (display && (document as unknown as { caretRangeFromPoint?(x: number, y: number): { startOffset: number } | null }).caretRangeFromPoint) {
+                  const range = (document as unknown as { caretRangeFromPoint(x: number, y: number): { startOffset: number } | null }).caretRangeFromPoint(e.clientX, e.clientY);
+                  if (range) index = range.startOffset;
+                }
+                setNameClickCaretIndex(Math.max(0, Math.min(index, display.length)));
+                setEditingName(true);
+              }}
+              className="text-left text-2xl font-bold text-foreground rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text"
+              style={{ appearance: "none", background: "none" }}
+            >
+              {loading ? "Customer" : displayName}
+            </button>
+          )}
           {customerProfile?.selectedPlan && (
             <Badge variant="secondary" className="text-sm font-medium">
               {customerProfile.selectedPlan}
@@ -304,78 +542,210 @@ export default function AdminUserInstallPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span>{customerProfile?.email ?? "—"}</span>
+                <div>
+                  {editingContactField === "email" ? (
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <input
+                        ref={emailInputRef}
+                        type="text"
+                        className="flex-1 min-w-0 h-9 text-sm bg-transparent border-0 outline-none focus:outline-none focus:ring-0 cursor-text rounded px-1 -mx-1"
+                        value={editingContactValue}
+                        onChange={(e) => setEditingContactValue(e.target.value)}
+                        onBlur={() => {
+                          fetch(`/api/admin/users/${userId}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ email: editingContactValue.trim() || undefined }),
+                          })
+                            .then((res) => res.ok && res.json())
+                            .then((json: { email?: string } | undefined) => {
+                              if (json != null)
+                                setCustomerProfile((p) => ({ ...(p ?? {}), email: json?.email ?? p?.email } as CustomerProfile));
+                            })
+                            .finally(() => setEditingContactField(null));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          if (e.key === "Escape") {
+                            setEditingContactValue(customerProfile?.email ?? "");
+                            setEditingContactField(null);
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        placeholder="Add email"
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        const value = customerProfile?.email ?? "";
+                        const display = customerProfile?.email || "Add email";
+                        setEditingContactValue(value);
+                        setContactClickCaretIndex(getCaretIndexFromClick(e, value.length));
+                        setEditingContactField("email");
+                      }}
+                      className="flex items-center gap-2 text-sm text-left w-full rounded px-2 py-1.5 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text"
+                      style={{ appearance: "none", background: "none" }}
+                    >
+                      <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className={customerProfile?.email ? "text-foreground" : "text-muted-foreground"}>{customerProfile?.email || "Add email"}</span>
+                    </button>
+                  )}
                 </div>
-                {customerProfile?.phone && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{customerProfile.phone}</span>
-                  </div>
-                )}
+                <div>
+                  {editingContactField === "phone" ? (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <input
+                        ref={phoneInputRef}
+                        type="tel"
+                        className="flex-1 min-w-0 h-9 text-sm bg-transparent border-0 outline-none focus:outline-none focus:ring-0 cursor-text rounded px-1 -mx-1"
+                        value={editingContactValue}
+                        onChange={(e) => setEditingContactValue(e.target.value)}
+                        onBlur={() => {
+                          fetch(`/api/admin/users/${userId}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ phone: editingContactValue.trim() || undefined }),
+                          })
+                            .then((res) => res.ok && res.json())
+                            .then((json: { phone?: string } | undefined) => {
+                              if (json != null)
+                                setCustomerProfile((p) => ({ ...(p ?? {}), phone: json?.phone ?? p?.phone } as CustomerProfile));
+                            })
+                            .finally(() => setEditingContactField(null));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          if (e.key === "Escape") {
+                            setEditingContactValue(customerProfile?.phone ?? "");
+                            setEditingContactField(null);
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        placeholder="Add phone"
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        const value = customerProfile?.phone ?? "";
+                        setEditingContactValue(value);
+                        setContactClickCaretIndex(getCaretIndexFromClick(e, value.length));
+                        setEditingContactField("phone");
+                      }}
+                      className="flex items-center gap-2 text-sm text-left w-full rounded px-2 py-1.5 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text"
+                      style={{ appearance: "none", background: "none" }}
+                    >
+                      <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className={customerProfile?.phone ? "text-foreground" : "text-muted-foreground"}>{customerProfile?.phone || "Add phone"}</span>
+                    </button>
+                  )}
+                </div>
+                <div>
+                  {editingContactField === "address" ? (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <input
+                        ref={addressInputRef}
+                        type="text"
+                        className="flex-1 min-w-0 h-9 text-sm bg-transparent border-0 outline-none focus:outline-none focus:ring-0 cursor-text rounded px-1 -mx-1"
+                        value={editingContactValue}
+                        onChange={(e) => setEditingContactValue(e.target.value)}
+                        onBlur={() => {
+                          fetch(`/api/admin/users/${userId}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ address: editingContactValue.trim() || undefined }),
+                          })
+                            .then((res) => res.ok && res.json())
+                            .then((json: { address?: string } | undefined) => {
+                              if (json != null)
+                                setCustomerProfile((p) => ({ ...(p ?? {}), address: json?.address ?? p?.address } as CustomerProfile));
+                            })
+                            .finally(() => setEditingContactField(null));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          if (e.key === "Escape") {
+                            setEditingContactValue(customerProfile?.address ?? [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") ?? "");
+                            setEditingContactField(null);
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        placeholder="Add address"
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        const value = customerProfile?.address ?? [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") ?? "";
+                        setEditingContactValue(value);
+                        setContactClickCaretIndex(getCaretIndexFromClick(e, value.length));
+                        setEditingContactField("address");
+                      }}
+                      className="flex items-center gap-2 text-sm text-left w-full rounded px-2 py-1.5 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text"
+                      style={{ appearance: "none", background: "none" }}
+                    >
+                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className={customerProfile?.address || customerProfile?.street ? "text-foreground" : "text-muted-foreground"}>
+                        {customerProfile?.address || [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") || "Add address"}
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Contact & property (Get Started info) */}
+          {/* Units installed */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Contact & property</CardTitle>
-              <CardDescription>From Get Started form</CardDescription>
+              <CardTitle className="text-base">Units installed</CardTitle>
+              <CardDescription>Properties assigned to this customer</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {customerProfile?.street ||
-                customerProfile?.city ||
-                customerProfile?.state ||
-                customerProfile?.zip ||
-                customerProfile?.address ||
-                customerProfile?.desiredInstallTime ||
-                customerProfile?.housingType ? (
-                <div className="space-y-3">
-                  {(customerProfile?.street ||
-                    customerProfile?.city ||
-                    customerProfile?.state ||
-                    customerProfile?.zip ||
-                    customerProfile?.address) && (
-                    <div className="flex items-start gap-2 text-sm">
-                      <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                      <span>
-                        {[customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip]
-                          .filter(Boolean)
-                          .join(", ") ||
-                          customerProfile?.address}
-                      </span>
-                    </div>
-                  )}
-                  {customerProfile?.desiredInstallTime && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span>Desired install: {customerProfile.desiredInstallTime}</span>
-                    </div>
-                  )}
-                  {customerProfile?.housingType && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-muted-foreground">Housing:</span>
-                      <span>{customerProfile.housingType === "own" ? "I own my home" : "Renting"}</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No Get Started info yet</p>
-              )}
-              {data?.propertyId && (
-                <div className="flex items-center gap-2 text-sm pt-2 border-t border-border mt-2">
-                  <span className="text-muted-foreground">Linked property:</span>
-                  <Link
-                    href="/admin/property"
-                    className="text-primary font-mono text-xs hover:underline"
-                  >
-                    {data.propertyId}
-                    <ExternalLink className="h-3 w-3 inline ml-0.5" />
-                  </Link>
-                </div>
-              )}
+            <CardContent className="grid grid-cols-2 gap-2">
+              {(() => {
+                const washerProperty = assignedProperties.find((p) => p.unitType === "Washer");
+                const dryerProperty = assignedProperties.find((p) => p.unitType === "Dryer");
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => washerProperty && setPropertyDialogId(washerProperty.id)}
+                      disabled={!washerProperty}
+                      className={
+                        washerProperty
+                          ? "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-green-600 dark:border-green-500 bg-green-50 dark:bg-green-950/40 px-4 py-3 text-sm font-medium text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 cursor-pointer"
+                          : "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-muted-foreground cursor-default border-dashed"
+                      }
+                    >
+                      {!washerProperty && <Plus className="h-4 w-4" />}
+                      Washer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => dryerProperty && setPropertyDialogId(dryerProperty.id)}
+                      disabled={!dryerProperty}
+                      className={
+                        dryerProperty
+                          ? "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-green-600 dark:border-green-500 bg-green-50 dark:bg-green-950/40 px-4 py-3 text-sm font-medium text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 cursor-pointer"
+                          : "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-muted-foreground cursor-default border-dashed"
+                      }
+                    >
+                      {!dryerProperty && <Plus className="h-4 w-4" />}
+                      Dryer
+                    </button>
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -400,8 +770,8 @@ export default function AdminUserInstallPage() {
       <form onSubmit={handleSubmit}>
         <Card>
           <CardHeader className="space-y-1">
-            <CardTitle className="text-base">Installation Details</CardTitle>
-            <CardDescription>Update install date, address, notes, photos, and signed contracts. Files are stored in Google Drive.</CardDescription>
+            <CardTitle className="text-base">Details</CardTitle>
+            <CardDescription>Notes, photos, and signed contracts. Files are stored in Google Drive.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {error && (
@@ -409,67 +779,6 @@ export default function AdminUserInstallPage() {
                 {error}
               </p>
             )}
-            <div className="space-y-2">
-              <label htmlFor="installDate" className="text-sm font-medium text-foreground">
-                Install date
-              </label>
-              <Input
-                id="installDate"
-                type="date"
-                value={installDate}
-                onChange={(e) => setInstallDate(e.target.value)}
-                className="w-full max-w-xs"
-              />
-            </div>
-            <div className="space-y-2">
-              <span className="text-sm font-medium text-foreground">Address</span>
-              {editingAddress ? (
-                <div className="space-y-2">
-                  <AddressAutocomplete
-                    key="install-address"
-                    id="installAddress"
-                    value={displayAddress}
-                    onChange={(v) => {
-                      setInstallStreet(v);
-                      setInstallCity("");
-                      setInstallState("");
-                      setInstallZip("");
-                    }}
-                    onPlaceSelect={({ street: s, city: c, state: st, zip: z }) => {
-                      setInstallStreet(s);
-                      setInstallCity(c);
-                      setInstallState(st);
-                      setInstallZip(z);
-                    }}
-                    onStandardizedChange={setInstallAddressStandardized}
-                    placeholder="Start typing address..."
-                    className="w-full"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setEditingAddress(false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-foreground">
-                    {displayAddress || "—"}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingAddress(true)}
-                  >
-                    Edit
-                  </Button>
-                </div>
-              )}
-            </div>
             <div className="space-y-2">
               <label htmlFor="notes" className="text-sm font-medium text-foreground">
                 Notes
@@ -659,23 +968,147 @@ export default function AdminUserInstallPage() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-3">
-              <Button type="submit" disabled={saving}>
-                {saving
-                  ? photos.length > 0 || contracts.length > 0
-                    ? "Uploading to Drive…"
-                    : "Saving…"
-                  : "Save"}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => router.push("/admin/users")}>
-                Cancel
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </form>
       </>
       )}
+      </div>
+
+      {/* Timeline column - full height */}
+      <aside className="w-full lg:w-[320px] lg:min-w-[320px] lg:self-stretch shrink-0">
+        <Card className="h-full lg:min-h-[calc(100vh-8rem)] lg:sticky lg:top-6 flex flex-col">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Timeline</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 space-y-0 pt-2">
+            {timeline ? (
+              <div className="relative space-y-4">
+                {/* vertical line */}
+                <span className="absolute left-[11px] top-2 bottom-2 w-px bg-border" aria-hidden />
+                {timeline.installDate && (
+                  <div className="relative flex gap-3">
+                    <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
+                      <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+                    </span>
+                    <div className="min-w-0 pt-0.5">
+                      <p className="text-sm font-medium text-foreground">Date installed</p>
+                      <p className="text-xs text-muted-foreground">{formatTimelineDate(timeline.installDate)}</p>
+                    </div>
+                  </div>
+                )}
+                {timeline.payments.map((p) => (
+                  <div key={p.date + p.amount} className="relative flex gap-3">
+                    <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
+                      <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                    </span>
+                    <div className="min-w-0 pt-0.5">
+                      <p className="text-sm font-medium text-foreground">Payment received</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatTimelineDate(p.date)} · {formatTimelineAmount(p.amount, p.currency)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {timeline.nextPaymentDate && timeline.nextPaymentAmount != null && (
+                  <div className="relative flex gap-3">
+                    <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
+                      <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                    </span>
+                    <div className="min-w-0 pt-0.5">
+                      <p className="text-sm font-medium text-foreground">Next payment scheduled</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatTimelineDate(timeline.nextPaymentDate)} · {formatTimelineAmount(timeline.nextPaymentAmount, timeline.nextPaymentCurrency)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {!timeline.installDate && timeline.payments.length === 0 && !timeline.nextPaymentDate && (
+                  <p className="text-sm text-muted-foreground pl-9">No timeline events yet.</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Loading timeline…</p>
+            )}
+          </CardContent>
+        </Card>
+      </aside>
+
+      {/* Property info popup */}
+      <Dialog open={!!propertyDialogId} onOpenChange={(open) => !open && setPropertyDialogId(null)}>
+        <DialogContent className="max-w-md">
+          {propertyDialogData ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Property info</DialogTitle>
+                <DialogDescription className="font-mono text-xs break-all">{propertyDialogData.id}</DialogDescription>
+              </DialogHeader>
+              <Card>
+                <CardContent className="pt-6 space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Model</p>
+                    <p className="text-sm">{propertyDialogData.model}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Unit type</p>
+                    <p className="text-sm">{propertyDialogData.unitType ?? "—"}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Status</p>
+                    <p className="text-sm">
+                      {propertyDialogData.status === "needs_repair"
+                        ? "Needs repair"
+                        : propertyDialogData.status === "no_longer_owned"
+                          ? "No longer owned"
+                          : propertyDialogData.assignedUserId
+                            ? "Installed"
+                            : "Available"}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Purchase cost</p>
+                    <p className="text-sm">
+                      {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(propertyDialogData.purchaseCost)}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Revenue generated</p>
+                    <p className="text-sm">
+                      {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(propertyDialogData.revenueGenerated ?? 0)}
+                    </p>
+                  </div>
+                  {(propertyDialogData.notes ?? "").trim() && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Notes</p>
+                      <p className="text-sm text-muted-foreground">{propertyDialogData.notes}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              <div className="flex items-center justify-between gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/admin/property">
+                    View in Property tab
+                    <ExternalLink className="h-3 w-3 ml-1 inline" />
+                  </Link>
+                </Button>
+                {propertyDialogData.assignedUserId && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleUninstall(propertyDialogData.id)}
+                    disabled={uninstallLoading}
+                  >
+                    {uninstallLoading ? "Sending…" : "Send to warehouse"}
+                  </Button>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground py-4">Loading…</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

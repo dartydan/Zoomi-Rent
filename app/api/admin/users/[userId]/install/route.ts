@@ -65,7 +65,12 @@ export async function GET(
     const user = await clerkClient.users.getUser(userId);
     const install = (user.publicMetadata?.[INSTALL_METADATA_KEY] ?? {}) as InstallInfo;
     const customerProfile = user.publicMetadata?.customerProfile as Record<string, unknown> | undefined;
-    const profileAddress = (customerProfile?.address as string) ?? undefined;
+    const clerkEmail = user.emailAddresses?.[0]?.emailAddress ?? undefined;
+    const mergedProfile = {
+      ...(customerProfile ?? {}),
+      email: (customerProfile?.email as string) || clerkEmail || undefined,
+    };
+    const profileAddress = (mergedProfile.address as string) ?? undefined;
     const installAddress = install.installAddress ?? profileAddress;
     const stripeCustomerId = user.publicMetadata?.stripeCustomerId as string | undefined;
     const lifetimeValue =
@@ -73,7 +78,7 @@ export async function GET(
     return NextResponse.json({
       ...install,
       installAddress: installAddress ?? undefined,
-      customerProfile: customerProfile ?? null,
+      customerProfile: mergedProfile,
       lifetimeValue,
     });
   } catch (err) {

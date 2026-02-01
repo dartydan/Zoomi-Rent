@@ -13,26 +13,31 @@ type Plan = {
   basePrice: number;
   autoPayPrice: number;
   popular?: boolean;
+  description: string;
 };
 
 const plans: Plan[] = [
   {
-    id: "basic",
-    name: "Basic Units",
+    id: "standard",
+    name: "Standard",
     basePrice: 70,
     autoPayPrice: 60,
+    description:
+      "Reliable washer and dryer rental for everyday use. Includes delivery, professional installation at no cost, and normal wear coverage. Ideal for tenants who want dependable machines without unnecessary extras.",
   },
   {
-    id: "premium",
-    name: "Premium Units",
+    id: "plus",
+    name: "Plus",
     basePrice: 90,
     autoPayPrice: 80,
     popular: true,
+    description:
+      "Everything in Standard, with added convenience and priority care. Includes faster service response and upgraded machine options. Best for households that want fewer interruptions and quicker support.",
   },
 ];
 
 export function PricingCalculator() {
-  const [selectedPlan, setSelectedPlan] = useState<string>("premium");
+  const [selectedPlan, setSelectedPlan] = useState<string>("plus");
   const [useAutoPay, setUseAutoPay] = useState<boolean>(true);
   const { openGetStarted } = useGetStarted();
 
@@ -147,8 +152,13 @@ export function PricingCalculator() {
               <p className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
                 {selectedPlanData?.name}
               </p>
+              {selectedPlanData?.description && (
+                <p className="text-sm text-muted-foreground max-w-xl">
+                  {selectedPlanData.description}
+                </p>
+              )}
             </div>
-            <Button size="lg" className="w-full sm:w-auto px-8 py-6 text-lg hover:scale-105 transition-transform whitespace-nowrap" onClick={() => openGetStarted(selectedPlanData?.name)}>
+            <Button size="lg" className="w-full sm:w-auto px-8 py-6 text-lg hover:scale-105 transition-transform whitespace-nowrap shrink-0" onClick={() => openGetStarted(selectedPlanData?.name)}>
               Get Started
             </Button>
           </div>

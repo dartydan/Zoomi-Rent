@@ -53,6 +53,7 @@ export async function PATCH(
     const { id } = await params;
     const body = (await req.json()) as {
       model?: string;
+      unitType?: "Washer" | "Dryer" | null;
       purchaseCost?: number;
       notes?: string;
       assignedUserId?: string | null;
@@ -120,6 +121,7 @@ export async function PATCH(
       updatedAt: new Date().toISOString(),
     };
     if (typeof body.model === "string") updated.model = body.model.trim();
+    if (body.unitType !== undefined) updated.unitType = body.unitType === "Washer" || body.unitType === "Dryer" ? body.unitType : undefined;
     if (typeof body.purchaseCost === "number") updated.purchaseCost = body.purchaseCost;
     if (body.notes !== undefined) updated.notes = typeof body.notes === "string" ? body.notes.trim() : undefined;
     if (body.status !== undefined && ["available", "needs_repair", "no_longer_owned"].includes(body.status))

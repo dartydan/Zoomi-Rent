@@ -6,9 +6,13 @@ export type PropertyStatus = "available" | "needs_repair" | "no_longer_owned";
 /**
  * Property/asset tracked in admin. Stored in data/properties.json (or DB in production).
  */
+export type PropertyUnitType = "Washer" | "Dryer";
+
 export type Property = {
   id: string;
   model: string;
+  /** Washer or Dryer. */
+  unitType?: PropertyUnitType;
   purchaseCost: number; // cost to purchase the asset
   revenueGenerated: number; // stored cumulative; + current assignment when assigned
   notes?: string;

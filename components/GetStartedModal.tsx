@@ -33,11 +33,7 @@ export function GetStartedModal() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [street, setStreet] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [zip, setZip] = useState("");
-  const [addressStandardized, setAddressStandardized] = useState(false);
+  const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [desiredInstallTime, setDesiredInstallTime] = useState("");
   const [housingType, setHousingType] = useState<HousingType>("rent");
@@ -47,10 +43,7 @@ export function GetStartedModal() {
   const [pendingProfile, setPendingProfile] = useState<{
     firstName: string;
     lastName: string;
-    street?: string;
-    city?: string;
-    state?: string;
-    zip?: string;
+    address: string;
     phone: string;
     email: string;
     desiredInstallTime: string;
@@ -75,11 +68,7 @@ export function GetStartedModal() {
       setEmail("");
       setPassword("");
     }
-    setStreet("");
-    setCity("");
-    setState("");
-    setZip("");
-    setAddressStandardized(false);
+    setAddress("");
     setPhone("");
     setDesiredInstallTime("");
     setHousingType("rent");
@@ -92,10 +81,7 @@ export function GetStartedModal() {
   const profilePayload = () => ({
     firstName: firstName.trim(),
     lastName: lastName.trim(),
-    street: street.trim(),
-    city: city.trim(),
-    state: state.trim(),
-    zip: zip.trim(),
+    address: address.trim(),
     phone: phone.trim(),
     email: email.trim(),
     desiredInstallTime: desiredInstallTime.trim(),
@@ -133,12 +119,9 @@ export function GetStartedModal() {
       };
       if (data.found && data.firstName != null) setFirstName(data.firstName);
       if (data.found && data.lastName != null) setLastName(data.lastName);
-      if (data.found && data.street != null) setStreet(data.street);
-      if (data.found && data.city != null) setCity(data.city);
-      if (data.found && data.state != null) setState(data.state);
-      if (data.found && data.zip != null) setZip(data.zip);
-      if (data.found && data.address != null && !data.street && !data.city && !data.state && !data.zip)
-        setStreet(data.address);
+      if (data.found && data.address != null) setAddress(data.address);
+      else if (data.found && (data.street || data.city || data.state || data.zip))
+        setAddress([data.street, data.city, data.state, data.zip].filter(Boolean).join(", "));
     } catch {
       // ignore lookup errors
     }
@@ -148,8 +131,7 @@ export function GetStartedModal() {
     e.preventDefault();
     setError(null);
 
-    const hasAddress = [street, city, state, zip].some((s) => s.trim() !== "");
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !hasAddress || !phone.trim()) {
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !address.trim() || !phone.trim()) {
       setError("Please fill in all required fields.");
       return;
     }
@@ -368,54 +350,18 @@ export function GetStartedModal() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="street">Street *</Label>
-                <AddressAutocomplete
-                  id="street"
-                  value={street}
-                  onChange={setStreet}
-                  onPlaceSelect={({ street: s, city: c, state: st, zip: z }) => {
-                    setStreet(s);
-                    setCity(c);
-                    setState(st);
-                    setZip(z);
-                  }}
-                  onStandardizedChange={setAddressStandardized}
-                  placeholder="Street address"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="city">City *</Label>
-                <Input
-                  id="city"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="City"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="state">State *</Label>
-                <Input
-                  id="state"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  placeholder="State"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="zip">ZIP *</Label>
-                <Input
-                  id="zip"
-                  value={zip}
-                  onChange={(e) => setZip(e.target.value)}
-                  placeholder="ZIP"
-                  required
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="address">Address *</Label>
+              <AddressAutocomplete
+                id="address"
+                value={address}
+                onChange={setAddress}
+                onPlaceSelect={({ street, city, state, zip }) => {
+                  setAddress([street, city, state, zip].filter(Boolean).join(", "));
+                }}
+                placeholder="Street, city, state, ZIP"
+                required
+              />
             </div>
 
             <div className="space-y-2">

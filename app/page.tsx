@@ -17,7 +17,7 @@ function PhotoGallerySection() {
     {
       url: "/washerdryer.webp",
       alt: "Modern apartment with washer and dryer",
-      caption: "Premium units for any space"
+      caption: "Plus units for any space"
     },
     {
       url: "/install.jpg",

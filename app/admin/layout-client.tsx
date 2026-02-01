@@ -1,12 +1,13 @@
 "use client";
 
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { useTheme } from "next-themes";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserButton } from "@clerk/nextjs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Moon, Sun } from "lucide-react";
 import Link from "next/link";
 
 export function AdminLayoutClient({
@@ -14,13 +15,15 @@ export function AdminLayoutClient({
 }: {
   children: React.ReactNode;
 }) {
+  const { setTheme, resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+
   return (
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
           <header className="flex h-12 shrink-0 items-center gap-4 border-b border-border px-4">
-            <SidebarTrigger className="-ml-1" />
             <div className="flex flex-1 items-center gap-2">
               <Badge variant="outline" className="text-xs">Admin</Badge>
             </div>
@@ -29,6 +32,16 @@ export function AdminLayoutClient({
                 <ArrowLeft className="h-4 w-4" />
                 <span className="hidden sm:inline">Back to rent.zoomi.co</span>
               </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative h-9 w-9 shrink-0 border border-transparent hover:border-border rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              onClick={() => setTheme(isDark ? "light" : "dark")}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              <Sun className="h-4 w-4 scale-0 transition-all dark:scale-100" />
+              <Moon className="absolute h-4 w-4 scale-100 transition-all dark:scale-0" />
             </Button>
             <UserButton afterSignOutUrl="/" />
           </header>

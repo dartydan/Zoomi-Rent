@@ -28,9 +28,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus, DollarSign, TrendingUp, User } from "lucide-react";
-import type { Property, PropertyStatus } from "@/lib/property";
+import type { Property, PropertyStatus, PropertyUnitType } from "@/lib/property";
 
-type EditableField = "model" | "purchaseCost" | "notes" | "assignedUserId";
+type EditableField = "model" | "unitType" | "purchaseCost" | "notes" | "assignedUserId";
+
+const UNIT_TYPE_OPTIONS: { value: "" | PropertyUnitType; label: string }[] = [
+  { value: "", label: "—" },
+  { value: "Washer", label: "Washer" },
+  { value: "Dryer", label: "Dryer" },
+];
 
 type AdminUser = {
   id: string;
@@ -39,6 +45,8 @@ type AdminUser = {
   lastName: string | null;
   stripeCustomerId?: string | null;
   installDate?: string | null;
+  installAddress?: string | null;
+  address?: string | null;
 };
 
 function formatCurrency(n: number) {
@@ -70,7 +78,7 @@ function getDotStatus(item: Property, userById: (id: string) => AdminUser | unde
 const DOT_COLORS: Record<DotStatus, string> = {
   installed: "bg-green-500",
   available: "bg-blue-500",
-  needs_repair: "bg-yellow-500",
+  needs_repair: "bg-amber-500",
   no_longer_owned: "bg-red-500",
 };
 
@@ -93,6 +101,7 @@ export default function PropertyPage() {
   const [infoEditingField, setInfoEditingField] = useState<EditableField | null>(null);
   const [editingCell, setEditingCell] = useState<{ propertyId: string; field: EditableField } | null>(null);
   const [formModel, setFormModel] = useState("");
+  const [formUnitType, setFormUnitType] = useState<string>("");
   const [formPurchaseCost, setFormPurchaseCost] = useState("");
   const [formAssignedUserId, setFormAssignedUserId] = useState<string>("");
   const [formNotes, setFormNotes] = useState("");
@@ -120,7 +129,7 @@ export default function PropertyPage() {
 
   async function patchProperty(
     propertyId: string,
-    payload: { model?: string; purchaseCost?: number; notes?: string; assignedUserId?: string | null }
+    payload: { model?: string; unitType?: PropertyUnitType | null; purchaseCost?: number; notes?: string; assignedUserId?: string | null }
   ): Promise<Property | null> {
     try {
       const res = await fetch(`/api/admin/property/${propertyId}`, {
@@ -182,6 +191,7 @@ export default function PropertyPage() {
   function openCreate() {
     setEditingId(null);
     setFormModel("");
+    setFormUnitType("");
     setFormPurchaseCost("");
     setFormAssignedUserId("");
     setFormNotes("");
@@ -192,6 +202,7 @@ export default function PropertyPage() {
   function openEdit(item: Property) {
     setEditingId(item.id);
     setFormModel(item.model);
+    setFormUnitType(item.unitType ?? "");
     setFormPurchaseCost(String(item.purchaseCost));
     setFormAssignedUserId(item.assignedUserId ?? "");
     setFormNotes(item.notes ?? "");
@@ -215,6 +226,7 @@ export default function PropertyPage() {
       return;
     }
 
+    const unitType = formUnitType === "Washer" || formUnitType === "Dryer" ? formUnitType : undefined;
     setSaving(true);
     try {
       if (editingId) {
@@ -223,6 +235,7 @@ export default function PropertyPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model,
+            unitType: unitType ?? null,
             purchaseCost,
             notes: formNotes.trim() || undefined,
             assignedUserId: assignedUserId ?? null,
@@ -240,6 +253,7 @@ export default function PropertyPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             model,
+            unitType: unitType ?? undefined,
             purchaseCost,
             notes: formNotes.trim() || undefined,
           }),
@@ -298,7 +312,9 @@ export default function PropertyPage() {
                 <TableRow>
                   <TableHead className="pl-6 w-10" aria-label="Status" />
                   <TableHead className="w-[180px]">ID</TableHead>
+                  <TableHead className="min-w-[140px]">Current Location</TableHead>
                   <TableHead>Model</TableHead>
+                  <TableHead className="w-[100px]">Unit type</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead className="text-right">Purchase cost</TableHead>
                   <TableHead className="text-right">Revenue generated</TableHead>
@@ -308,7 +324,7 @@ export default function PropertyPage() {
               <TableBody>
                 {properties.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8 pl-6 pr-6">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8 pl-6 pr-6">
                       No properties yet. Add one to get started.
                     </TableCell>
                   </TableRow>
@@ -339,7 +355,7 @@ export default function PropertyPage() {
                                 Available to install
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => updateStatus(item.id, "needs_repair")}>
-                                <span className="inline-block h-2 w-2 rounded-full bg-yellow-500 mr-2" />
+                                <span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />
                                 Needs repair
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => updateStatus(item.id, "no_longer_owned")}>
@@ -363,6 +379,21 @@ export default function PropertyPage() {
                           >
                             {item.id}
                           </button>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate" title={(() => {
+                          const u = item.assignedUserId ? userById(item.assignedUserId) : undefined;
+                          const installed = u?.installDate;
+                          if (!installed) return "At Warehouse";
+                          const addr = u?.installAddress ?? u?.address ?? null;
+                          return addr || "—";
+                        })()}>
+                          {(() => {
+                            const u = item.assignedUserId ? userById(item.assignedUserId) : undefined;
+                            const installed = u?.installDate;
+                            if (!installed) return "At Warehouse";
+                            const addr = u?.installAddress ?? u?.address ?? null;
+                            return addr || "—";
+                          })()}
                         </TableCell>
                         <TableCell className="font-medium">
                           {isEditing("model") ? (
@@ -397,19 +428,25 @@ export default function PropertyPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <CustomSelect
-                            options={[
-                              { value: "", label: "None" },
-                              ...users.map((u) => ({ value: u.id, label: userDisplay(u) })),
-                            ]}
-                            value={item.assignedUserId ?? ""}
-                            onChange={async (value) => {
-                              await patchProperty(item.id, { assignedUserId: value.trim() || null });
-                            }}
-                            placeholder="Customer"
-                            icon={<User className="h-4 w-4" />}
-                            className="min-w-[120px]"
-                          />
+                          <button
+                            type="button"
+                            onClick={() => { setEditingCell(null); setInfoPropertyId(item.id); }}
+                            className="text-left hover:bg-muted rounded px-1 py-0.5 -mx-1 w-full min-w-[90px] text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            {item.unitType ?? "—"}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            onClick={() => { setEditingCell(null); setInfoPropertyId(item.id); }}
+                            className="text-left hover:bg-muted rounded px-1 py-0.5 -mx-1 w-full min-w-[120px] text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            {(() => {
+                              const u = item.assignedUserId ? userById(item.assignedUserId) : undefined;
+                              return u ? userDisplay(u) : (item.assignedUserId ? item.assignedUserId : "No customer");
+                            })()}
+                          </button>
                         </TableCell>
                         <TableCell className="text-right">
                           {isEditing("purchaseCost") ? (
@@ -522,12 +559,21 @@ export default function PropertyPage() {
                 required
               />
             </div>
+            <div className="space-y-2">
+              <Label>Unit type</Label>
+              <CustomSelect
+                options={UNIT_TYPE_OPTIONS}
+                value={formUnitType}
+                onChange={setFormUnitType}
+                placeholder="Washer or Dryer"
+              />
+            </div>
             {editingId && (
               <div className="space-y-2">
                 <Label>Assign to customer</Label>
                 <CustomSelect
                   options={[
-                    { value: "", label: "None (unassigned)" },
+                    { value: "", label: "No customer" },
                     ...users.map((u) => ({ value: u.id, label: userDisplay(u) })),
                   ]}
                   value={formAssignedUserId}
@@ -594,13 +640,48 @@ export default function PropertyPage() {
             <>
               <DialogHeader>
                 <DialogTitle>Property info</DialogTitle>
-                <DialogDescription>{infoProperty.model}</DialogDescription>
+                <DialogDescription className="font-mono text-xs break-all">{infoProperty.id}</DialogDescription>
               </DialogHeader>
               <Card>
                 <CardContent className="pt-6 space-y-4">
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">ID</p>
-                    <p className="font-mono text-sm break-all">{infoProperty.id}</p>
+                    <p className="text-xs font-medium text-muted-foreground">Status</p>
+                    <span className="flex items-center gap-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            title={`${DOT_LABELS[getDotStatus(infoProperty, userById)]} (click to change)`}
+                            aria-label={`Status: ${DOT_LABELS[getDotStatus(infoProperty, userById)]}. Click to change.`}
+                            className={`h-2.5 w-2.5 shrink-0 rounded-full border border-border ${DOT_COLORS[getDotStatus(infoProperty, userById)]} focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer`}
+                          />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          <DropdownMenuItem
+                            onClick={() => updateStatus(infoProperty.id, "available")}
+                            disabled={getDotStatus(infoProperty, userById) === "installed"}
+                          >
+                            <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-2" />
+                            Available to install
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => updateStatus(infoProperty.id, "needs_repair")}>
+                            <span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />
+                            Needs repair
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => updateStatus(infoProperty.id, "no_longer_owned")}>
+                            <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-2" />
+                            No longer owned
+                          </DropdownMenuItem>
+                          {getDotStatus(infoProperty, userById) === "installed" && (
+                            <DropdownMenuItem disabled>
+                              <span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-2" />
+                              Installed (automatic when assigned + install date)
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      <span className="text-sm">{DOT_LABELS[getDotStatus(infoProperty, userById)]}</span>
+                    </span>
                   </div>
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground">Model</p>
@@ -635,20 +716,22 @@ export default function PropertyPage() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Status</p>
-                    <span className="flex items-center gap-2">
-                      <span
-                        className={`h-2.5 w-2.5 rounded-full border border-border shrink-0 ${DOT_COLORS[getDotStatus(infoProperty, userById)]}`}
-                        aria-hidden
-                      />
-                      <span className="text-sm">{DOT_LABELS[getDotStatus(infoProperty, userById)]}</span>
-                    </span>
+                    <p className="text-xs font-medium text-muted-foreground">Unit type</p>
+                    <CustomSelect
+                      options={UNIT_TYPE_OPTIONS}
+                      value={infoProperty.unitType ?? ""}
+                      onChange={async (value) => {
+                        const v = value === "Washer" || value === "Dryer" ? value : null;
+                        await patchProperty(infoProperty.id, { unitType: v });
+                      }}
+                      placeholder="Washer or Dryer"
+                    />
                   </div>
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground">Customer</p>
                     <CustomSelect
                       options={[
-                        { value: "", label: "None (unassigned)" },
+                        { value: "", label: "No customer" },
                         ...users.map((u) => ({ value: u.id, label: userDisplay(u) })),
                       ]}
                       value={infoProperty.assignedUserId ?? ""}
@@ -735,7 +818,16 @@ export default function PropertyPage() {
                   </div>
                 </CardContent>
               </Card>
-              <div className="flex justify-end">
+              <div className="flex items-center justify-between gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => updateStatus(infoProperty.id, "needs_repair")}
+                >
+                  Mark as needs repair
+                </Button>
                 <Button type="button" variant="outline" onClick={() => { setInfoPropertyId(null); setInfoEditingField(null); }}>
                   Close
                 </Button>

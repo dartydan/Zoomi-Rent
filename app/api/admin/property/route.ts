@@ -55,10 +55,12 @@ export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as {
       model?: string;
+      unitType?: "Washer" | "Dryer";
       purchaseCost?: number;
       notes?: string;
     };
     const model = typeof body.model === "string" ? body.model.trim() : "";
+    const unitType = body.unitType === "Washer" || body.unitType === "Dryer" ? body.unitType : undefined;
     const purchaseCost = typeof body.purchaseCost === "number" ? body.purchaseCost : 0;
     const notes = typeof body.notes === "string" ? body.notes.trim() : undefined;
 
@@ -75,6 +77,7 @@ export async function POST(req: NextRequest) {
     const newItem: Property = {
       id,
       model,
+      unitType,
       purchaseCost,
       revenueGenerated: 0,
       notes,

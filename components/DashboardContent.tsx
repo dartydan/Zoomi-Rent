@@ -250,7 +250,7 @@ export function DashboardContent() {
   const impersonateUser = impersonating ? adminUsers.find((u) => u.id === impersonateUserId) : null;
 
   return (
-    <div className="space-y-6">
+    <div className="flex min-h-full flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-0.5">
           <h1 className="text-2xl font-bold text-foreground">
@@ -332,6 +332,31 @@ export function DashboardContent() {
       )}
 
       <PaymentHistory invoices={data?.invoices || []} />
+
+      <Card className="mt-auto border-border bg-accent text-accent-foreground">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-medium">Need help?</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <p>
+            Call or text us at{" "}
+            <a href="tel:765-280-0057" className="underline underline-offset-2 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded">
+              765-280-0057
+            </a>
+            .
+          </p>
+          <p>
+            Email us at{" "}
+            <a href="mailto:help@zoomi.co" className="underline underline-offset-2 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded">
+              help@zoomi.co
+            </a>
+            .
+          </p>
+          <p className="opacity-90">
+            We aim to respond within 24 hours.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

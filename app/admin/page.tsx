@@ -872,8 +872,8 @@ export default function AdminPage() {
                     icon={<Package className="h-4 w-4" />}
                     required
                     options={[
-                      { value: "Basic", label: "Basic" },
-                      { value: "Premium", label: "Premium" },
+                      { value: "Standard", label: "Standard" },
+                      { value: "Plus", label: "Plus" },
                     ]}
                   />
                 </div>

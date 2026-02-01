@@ -83,7 +83,7 @@ export default function CustomersPage() {
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     Promise.all([
-      fetch("/api/admin/users", { signal: controller.signal }).then((res) => {
+      fetch("/api/admin/users", { cache: "no-store", signal: controller.signal }).then((res) => {
         if (!res.ok) return res.json().then((data) => Promise.reject(new Error((data as { error?: string }).error ?? "Failed to load")));
         return res.json() as Promise<{ users: Customer[] }>;
       }),
