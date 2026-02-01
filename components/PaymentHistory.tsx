@@ -28,6 +28,7 @@ interface Invoice {
   status: string;
   invoicePdf: string | null;
   hostedInvoiceUrl: string | null;
+  refunded?: boolean;
 }
 
 interface PaymentHistoryProps {
