@@ -10,6 +10,25 @@ function getStripe() {
   return new Stripe(key);
 }
 
+function applySubscriptionDiscount(
+  baseAmount: number,
+  currency: string,
+  subscription: Stripe.Subscription
+): number {
+  const discounts = subscription.discounts ?? (subscription.discount ? [subscription.discount] : []);
+  let amount = baseAmount;
+  for (const d of discounts) {
+    const coupon = typeof d === "object" && d && "coupon" in d ? d.coupon : null;
+    if (!coupon || typeof coupon !== "object") continue;
+    if (coupon.percent_off != null && coupon.percent_off > 0) {
+      amount = amount * (1 - coupon.percent_off / 100);
+    } else if (coupon.amount_off != null && coupon.amount_off > 0 && coupon.currency === currency) {
+      amount = amount - coupon.amount_off;
+    }
+  }
+  return Math.max(0, Math.round(amount));
+}
+
 export async function GET(request: Request) {
   try {
     const { userId } = await auth();
@@ -27,7 +46,7 @@ export async function GET(request: Request) {
     }
 
     const stripe = getStripe();
-    const expand = ["data.items.data.price"];
+    const expand = ["data.items.data.price", "data.discounts", "data.discounts.coupon"];
     const now = Math.floor(Date.now() / 1000);
 
     type NextPayment = {
@@ -61,14 +80,16 @@ export async function GET(request: Request) {
           currency = upcoming.currency;
         }
       } catch {
-        // fall back to price
+        // fall back to price (with discount applied if present)
       }
       if (amount == null) {
         const item = subscription.items?.data?.[0];
         const price = item?.price;
+        const quantity = item?.quantity ?? 1;
         if (price?.unit_amount != null && price?.currency) {
-          amount = price.unit_amount;
+          const baseAmount = price.unit_amount * quantity;
           currency = price.currency;
+          amount = applySubscriptionDiscount(baseAmount, currency, subscription);
         }
       }
       if (amount == null) continue;
