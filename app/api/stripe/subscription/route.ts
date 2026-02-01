@@ -29,6 +29,23 @@ function applySubscriptionDiscount(
   return Math.max(0, Math.round(amount));
 }
 
+function getSubscriptionCouponLabel(subscription: Stripe.Subscription): string | null {
+  const discounts = subscription.discounts ?? (subscription.discount ? [subscription.discount] : []);
+  const first = discounts[0];
+  const coupon = typeof first === "object" && first && "coupon" in first ? first.coupon : null;
+  if (!coupon || typeof coupon !== "object") return null;
+  if (coupon.name) return coupon.name;
+  if (coupon.percent_off != null && coupon.percent_off > 0) return `${coupon.percent_off}% off`;
+  if (coupon.amount_off != null && coupon.amount_off > 0 && coupon.currency) {
+    const formatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: (coupon.currency as string).toUpperCase(),
+    });
+    return `${formatter.format(coupon.amount_off / 100)} off`;
+  }
+  return null;
+}
+
 export async function GET(request: Request) {
   try {
     const { userId } = await auth();
@@ -158,6 +175,21 @@ export async function GET(request: Request) {
     const nextPaymentAmount =
       soonest != null ? { amount: soonest.amount, currency: soonest.currency } : null;
     const subscriptionLabel = soonest?.label ?? null;
+    const activeCouponLabel =
+      soonest?.subscription != null ? getSubscriptionCouponLabel(soonest.subscription) : null;
+    let activeCouponSavings: { amount: number; currency: string } | null = null;
+    if (soonest?.subscription != null && activeCouponLabel != null) {
+      const item = soonest.subscription.items?.data?.[0];
+      const price = item?.price;
+      const quantity = item?.quantity ?? 1;
+      const base =
+        price && typeof price === "object" && price.unit_amount != null
+          ? price.unit_amount * quantity
+          : null;
+      if (base != null && base > soonest.amount) {
+        activeCouponSavings = { amount: base - soonest.amount, currency: soonest.currency };
+      }
+    }
     const hasActiveSubscription = allSubs.length > 0;
 
     return NextResponse.json({
@@ -165,6 +197,8 @@ export async function GET(request: Request) {
       nextPaymentAmount,
       hasActiveSubscription,
       subscriptionLabel,
+      activeCouponLabel,
+      activeCouponSavings,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

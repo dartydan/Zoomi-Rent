@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth, useClerk, useUser } from "@clerk/nextjs";
 import { Home, LogIn, LogOut, Users, Building, DollarSign, BarChart3, LayoutDashboard, XCircle, Lock } from "lucide-react";
@@ -55,7 +56,8 @@ export function AppSidebar() {
       <Sidebar>
         <SidebarHeader>
           <SidebarMenuButton asChild size="lg">
-            <Link href="/admin">
+            <Link href="/admin" className="flex items-center gap-2">
+              <Image src="/logo.png" alt="" width={28} height={28} className="shrink-0 rounded object-contain" />
               <span className="font-semibold text-sidebar-foreground">Zoomi Rentals</span>
             </Link>
           </SidebarMenuButton>
@@ -127,7 +129,8 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader>
         <SidebarMenuButton asChild size="lg">
-          <Link href={isSignedIn ? "/dashboard" : "/"}>
+          <Link href={isSignedIn ? "/dashboard" : "/"} className="flex items-center gap-2">
+            <Image src="/logo.png" alt="" width={28} height={28} className="shrink-0 rounded object-contain" />
             <span className="font-semibold text-sidebar-foreground">Zoomi Rentals</span>
           </Link>
         </SidebarMenuButton>
@@ -197,7 +200,6 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <p className="px-2 pt-2 text-xs text-muted-foreground">Washer &amp; dryer rental</p>
       </SidebarFooter>
     </Sidebar>
   );

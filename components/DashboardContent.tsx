@@ -5,6 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import { PaymentHistory } from "./PaymentHistory";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardHeader,
@@ -32,6 +33,8 @@ interface DashboardData {
   nextPaymentAmount: { amount: number; currency: string } | null;
   hasActiveSubscription: boolean;
   subscriptionLabel: string | null;
+  activeCouponLabel: string | null;
+  activeCouponSavings: { amount: number; currency: string } | null;
 }
 
 type AdminUser = {
@@ -105,6 +108,8 @@ export function DashboardContent() {
           nextPaymentAmount: { amount: 6000, currency: "usd" },
           hasActiveSubscription: true,
           subscriptionLabel: "Washer & Dryer Rental",
+          activeCouponLabel: null,
+          activeCouponSavings: null,
         };
         setData(mockData);
         setLoading(false);
@@ -134,6 +139,8 @@ export function DashboardContent() {
             nextPaymentAmount: null,
             hasActiveSubscription: false,
             subscriptionLabel: null,
+            activeCouponLabel: null,
+            activeCouponSavings: null,
           });
           setLoading(false);
           return;
@@ -159,6 +166,8 @@ export function DashboardContent() {
           invoices: invoicesData.invoices || [],
           nextPaymentDate: subscriptionData.nextPaymentDate ?? null,
           nextPaymentAmount: subscriptionData.nextPaymentAmount ?? null,
+          activeCouponLabel: subscriptionData.activeCouponLabel ?? null,
+          activeCouponSavings: subscriptionData.activeCouponSavings ?? null,
           hasActiveSubscription: subscriptionData.hasActiveSubscription ?? false,
           subscriptionLabel: subscriptionData.subscriptionLabel ?? null,
         });
@@ -268,8 +277,20 @@ export function DashboardContent() {
       {data?.nextPaymentDate && (
         <div className="grid min-w-0 gap-4 sm:grid-cols-[1fr_1fr]">
           <Card className="min-w-0 overflow-hidden border-2 bg-gradient-to-br from-background to-muted/30">
-            <CardHeader className="space-y-1">
+            <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
               <CardTitle className="text-base font-medium text-muted-foreground">Next payment</CardTitle>
+              {data.activeCouponLabel && (
+                <Badge variant="secondary" className="shrink-0 items-center gap-1.5 text-xs font-normal">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-500" aria-hidden />
+                  {data.activeCouponLabel}
+                  {data.activeCouponSavings && data.activeCouponSavings.amount > 0 && (
+                    <>
+                      {" · "}
+                      Save {formatNextPaymentAmount(data.activeCouponSavings.amount, data.activeCouponSavings.currency)}
+                    </>
+                  )}
+                </Badge>
+              )}
             </CardHeader>
             <CardContent className="space-y-2 overflow-hidden">
               {data.nextPaymentAmount && (
