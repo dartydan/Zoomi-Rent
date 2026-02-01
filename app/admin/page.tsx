@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, User, Mail, MapPin, Clock, Package, CheckCircle } from "lucide-react";
 import { CustomSelect } from "@/components/ui/custom-select";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import {
   Dialog,
   DialogContent,
@@ -24,90 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-// Mock data for demo - spread across 2 weeks (userId links to customer detail page)
-const mockInstalls = [
-  {
-    id: "1",
-    userId: "demo_user_4",
-    customerName: "Emily Davis",
-    address: "123 Oak St, Muncie, IN",
-    date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
-    time: "10:00 AM",
-    units: "Basic",
-    status: "scheduled" as const,
-  },
-  {
-    id: "2",
-    userId: "demo_user_5",
-    customerName: "Robert Wilson",
-    address: "456 Maple Ave, Anderson, IN",
-    date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    time: "2:00 PM",
-    units: "Premium",
-    status: "scheduled" as const,
-  },
-  {
-    id: "3",
-    userId: "demo_user_3",
-    customerName: "Lisa Martinez",
-    address: "789 Pine Rd, Richmond, IN",
-    date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-    time: "9:00 AM",
-    units: "Basic",
-    status: "scheduled" as const,
-  },
-  {
-    id: "4",
-    userId: "demo_user_1",
-    customerName: "James Anderson",
-    address: "321 Elm St, New Castle, IN",
-    date: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000),
-    time: "1:30 PM",
-    units: "Premium",
-    status: "scheduled" as const,
-  },
-  {
-    id: "5",
-    userId: "demo_user_2",
-    customerName: "Sarah Thompson",
-    address: "555 Oak Dr, Yorktown, IN",
-    date: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
-    time: "11:00 AM",
-    units: "Basic",
-    status: "scheduled" as const,
-  },
-  {
-    id: "6",
-    userId: "demo_user_3",
-    customerName: "Michael Chen",
-    address: "789 Main St, Muncie, IN",
-    date: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
-    time: "3:00 PM",
-    units: "Premium",
-    status: "pending" as const,
-  },
-  {
-    id: "7",
-    userId: "demo_user_1",
-    customerName: "Jennifer Lee",
-    address: "222 River Rd, Anderson, IN",
-    date: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000),
-    time: "10:30 AM",
-    units: "Basic",
-    status: "scheduled" as const,
-  },
-  {
-    id: "8",
-    userId: "demo_user_2",
-    customerName: "David Martinez",
-    address: "444 Lake Ave, Richmond, IN",
-    date: new Date(Date.now() + 11 * 24 * 60 * 60 * 1000),
-    time: "2:30 PM",
-    units: "Premium",
-    status: "scheduled" as const,
-  },
-];
 
 type Install = {
   id: string;
@@ -129,6 +46,8 @@ type Customer = {
 
 export default function AdminPage() {
   const [timeframe, setTimeframe] = useState<"week" | "month" | "quarter" | "year">("month");
+  const [installs, setInstalls] = useState<Install[]>([]);
+  const [installsLoading, setInstallsLoading] = useState(true);
   const [selectedInstall, setSelectedInstall] = useState<Install | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -140,49 +59,110 @@ export default function AdminPage() {
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [selectedUnits, setSelectedUnits] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("pending");
-  
-  // Mock business metrics
-  const unitsRented = 45;
-  const unitsAvailable = 15;
-  const totalInventory = 60;
-  
-  // Revenue calculations based on timeframe
-  const revenueData = {
-    week: { current: 675, forecasted: 700 },
-    month: { current: 2700, forecasted: 3000 },
-    quarter: { current: 8100, forecasted: 9000 },
-    year: { current: 32400, forecasted: 36000 },
+  const [addressStreet, setAddressStreet] = useState("");
+  const [addressCity, setAddressCity] = useState("");
+  const [addressState, setAddressState] = useState("");
+  const [addressZip, setAddressZip] = useState("");
+  const [addInstallAddressStandardized, setAddInstallAddressStandardized] = useState(false);
+
+  // Fetch installs (from users with installDate)
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchInstalls() {
+      setInstallsLoading(true);
+      try {
+        const res = await fetch("/api/admin/users");
+        if (!res.ok) throw new Error("Failed to load");
+        const data = (await res.json()) as { users: Array<{ id: string; firstName: string | null; lastName: string | null; installDate: string | null; installAddress?: string | null; address?: string | null }> };
+        const users = data.users ?? [];
+        const list: Install[] = users
+          .filter((u) => u.installDate)
+          .map((u) => ({
+            id: u.id,
+            userId: u.id,
+            customerName: [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || "—",
+            address: u.installAddress ?? u.address ?? "—",
+            date: new Date(u.installDate!),
+            time: "—",
+            units: "—",
+            status: "scheduled" as const,
+          }));
+        if (!cancelled) setInstalls(list);
+      } catch {
+        if (!cancelled) setInstalls([]);
+      } finally {
+        if (!cancelled) setInstallsLoading(false);
+      }
+    }
+    fetchInstalls();
+    return () => { cancelled = true; };
+  }, []);
+
+  const refetchInstalls = async () => {
+    try {
+      const res = await fetch("/api/admin/users");
+      if (!res.ok) return;
+      const data = (await res.json()) as { users: Array<{ id: string; firstName: string | null; lastName: string | null; installDate: string | null; installAddress?: string | null; address?: string | null }> };
+      const users = data.users ?? [];
+      const list: Install[] = users
+        .filter((u) => u.installDate)
+        .map((u) => ({
+          id: u.id,
+          userId: u.id,
+          customerName: [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || "—",
+          address: u.installAddress ?? u.address ?? "—",
+          date: new Date(u.installDate!),
+          time: "—",
+          units: "—",
+          status: "scheduled" as const,
+        }));
+        setInstalls(list);
+    } catch {
+      // ignore
+    }
   };
+
+  // Inventory from property API (optional - show 0 if no API)
+  const [inventory, setInventory] = useState<{ total: number; assigned: number }>({ total: 0, assigned: 0 });
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/property")
+      .then((res) => res.ok ? res.json() : { properties: [] })
+      .then((data: { properties?: Array<{ assignedUserId?: string | null }> }) => {
+        const props = data.properties ?? [];
+        if (!cancelled) setInventory({ total: props.length, assigned: props.filter((p) => p.assignedUserId).length });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const totalInventory = inventory.total;
+  const unitsRented = inventory.assigned;
+  const unitsAvailable = Math.max(0, inventory.total - inventory.assigned);
   
-  const currentRevenue = revenueData[timeframe].current;
-  const forecastedRevenue = revenueData[timeframe].forecasted;
-  
+  // Revenue from properties (sum of revenueGenerated)
+  const [revenueTotal, setRevenueTotal] = useState<number>(0);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/property")
+      .then((res) => res.ok ? res.json() : { properties: [] })
+      .then((data: { properties?: Array<{ revenueGenerated?: number }> }) => {
+        const props = data.properties ?? [];
+        const sum = props.reduce((s, p) => s + (p.revenueGenerated ?? 0), 0);
+        if (!cancelled) setRevenueTotal(sum);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const currentRevenue = revenueTotal;
+  const forecastedRevenue = revenueTotal;
+
   // Fetch customers when add dialog opens
   useEffect(() => {
     if (isAddDialogOpen) {
-      // Fetch customers from API or use mock data
-      const fetchCustomers = async () => {
-        try {
-          // In development mode, use mock data
-          if (process.env.NODE_ENV === "development") {
-            setCustomers([
-              { id: "demo_user_1", email: "john.smith@example.com", firstName: "John", lastName: "Smith" },
-              { id: "demo_user_2", email: "sarah.johnson@example.com", firstName: "Sarah", lastName: "Johnson" },
-              { id: "demo_user_3", email: "michael.brown@example.com", firstName: "Michael", lastName: "Brown" },
-              { id: "demo_user_4", email: "emily.davis@example.com", firstName: "Emily", lastName: "Davis" },
-            ]);
-          } else {
-            const res = await fetch("/api/admin/users");
-            if (res.ok) {
-              const data = await res.json();
-              setCustomers(data.users || []);
-            }
-          }
-        } catch (error) {
-          console.error("Failed to fetch customers:", error);
-        }
-      };
-      fetchCustomers();
+      fetch("/api/admin/users")
+        .then((res) => res.ok ? res.json() : { users: [] })
+        .then((data: { users?: Customer[] }) => setCustomers(data.users ?? []))
+        .catch(() => setCustomers([]));
     }
   }, [isAddDialogOpen]);
   
@@ -244,7 +224,7 @@ export default function AdminPage() {
 
   // Get installs for a specific date, earliest time first
   const getInstallsForDate = (date: Date) => {
-    return mockInstalls
+    return installs
       .filter((install) => isSameDay(install.date, date))
       .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
   };
@@ -400,8 +380,79 @@ export default function AdminPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-7 gap-3">
-            {/* Calendar days */}
+          {/* Mobile: list view by date */}
+          <div className="block md:hidden space-y-4">
+            {daysInView.map((date, i) => {
+              const installsForDay = getInstallsForDate(date);
+              const isToday = isSameDay(date, new Date());
+              const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+              const dayNum = date.getDate();
+              const monthYear = date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+              return (
+                <div
+                  key={i}
+                  className={`rounded-lg border-2 p-3 ${
+                    isToday ? "border-primary/60 bg-primary/5" : "border-border"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2 pb-2 border-b border-border">
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground uppercase">
+                        {dayName}, {monthYear}
+                      </div>
+                      <div className={`text-lg font-bold ${isToday ? "text-primary" : "text-foreground"}`}>
+                        {dayNum}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDateForAdd(date);
+                        setIsAddDialogOpen(true);
+                      }}
+                      className="flex items-center justify-center h-8 w-8 rounded-full border-2 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
+                      aria-label="Add installation"
+                    >
+                      <span className="text-sm font-bold">+</span>
+                    </button>
+                  </div>
+                  <ul className="space-y-2">
+                    {installsForDay.length > 0 ? (
+                      installsForDay.map((install, idx) => (
+                        <li key={idx}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedInstall(install);
+                              setIsDialogOpen(true);
+                            }}
+                            className="w-full text-left rounded-md p-3 bg-primary/10 hover:bg-primary/20 transition-all border border-transparent hover:border-primary"
+                          >
+                            <div className="font-semibold text-primary text-sm">
+                              {install.time}
+                            </div>
+                            <div className="text-foreground text-sm">
+                              {install.customerName}
+                            </div>
+                            <div className="text-muted-foreground text-xs">
+                              {install.address}
+                            </div>
+                          </button>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-sm text-muted-foreground py-2">
+                        No installs
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop: 7-day calendar grid */}
+          <div className="hidden md:grid grid-cols-7 gap-3">
             {daysInView.map((date, i) => {
               const installsForDay = getInstallsForDate(date);
               const hasInstalls = installsForDay.length > 0;
@@ -432,6 +483,7 @@ export default function AdminPage() {
                       </div>
                     </div>
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedDateForAdd(date);
@@ -478,7 +530,6 @@ export default function AdminPage() {
                         className="text-xs text-center text-primary font-medium pt-1 cursor-pointer hover:underline"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Show all installs for this day in dialog
                           if (installsForDay.length > 0) {
                             setSelectedInstall(installsForDay[0]);
                             setIsDialogOpen(true);
@@ -603,12 +654,19 @@ export default function AdminPage() {
         open={isAddDialogOpen} 
         onOpenChange={(open) => {
           setIsAddDialogOpen(open);
-          if (!open) {
+          if (open) {
+            setAddInstallAddressStandardized(false);
+          } else {
             setSelectedCustomerId("");
             setIsNewCustomer(false);
             setSelectedTime("");
             setSelectedUnits("");
             setSelectedStatus("pending");
+            setAddressStreet("");
+            setAddressCity("");
+            setAddressState("");
+            setAddressZip("");
+            setAddInstallAddressStandardized(false);
           }
         }}
       >
@@ -629,65 +687,67 @@ export default function AdminPage() {
             onSubmit={async (e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
-              
+              const dateVal = formData.get("date") as string;
+              const street = addressStreet.trim();
+              const city = addressCity.trim();
+              const state = addressState.trim();
+              const zip = addressZip.trim();
+              const addressVal = [street, city, state, zip].filter(Boolean).join(", ");
+
+              if (addressVal && !addInstallAddressStandardized) {
+                alert("Please select an address from the suggestions to standardize it.");
+                return;
+              }
+
               try {
-                // If creating a new customer, handle customer creation first
                 if (isNewCustomer) {
-                  const customerName = formData.get("customerName") as string;
-                  const customerEmail = formData.get("customerEmail") as string;
-                  
-                  // In development mode, simulate customer creation
-                  if (process.env.NODE_ENV === "development") {
-                    alert(`Demo Mode:\n\nCustomer "${customerName}" (${customerEmail}) would be:\n1. Created in Clerk authentication system\n2. Linked to Stripe customer account\n3. Added to customer database\n\nInstallation scheduled successfully!`);
-                  } else {
-                    // Production: Create customer in Clerk and Stripe
-                    const response = await fetch("/api/admin/customers", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        name: customerName,
-                        email: customerEmail,
-                        address: formData.get("address"),
-                        installationDate: formData.get("date"),
-                        installationTime: formData.get("time"),
-                        units: formData.get("units"),
-                        status: formData.get("status"),
-                      }),
-                    });
-                    
-                    if (!response.ok) {
-                      throw new Error("Failed to create customer");
-                    }
-                    
-                    alert("Customer created and installation scheduled!");
+                  const customerName = (formData.get("customerName") as string)?.trim() ?? "";
+                  const customerEmail = (formData.get("customerEmail") as string)?.trim() ?? "";
+                  const [firstName, ...lastParts] = customerName.split(/\s+/);
+                  const lastName = lastParts.join(" ") || "";
+                  if (!firstName || !customerEmail || !addressVal) {
+                    alert("Please enter name, email, and address (Street, City, State, ZIP).");
+                    return;
                   }
+                  const res = await fetch("/api/admin/pending-customers", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      firstName,
+                      lastName,
+                      email: customerEmail,
+                      street: street || undefined,
+                      city: city || undefined,
+                      state: state || undefined,
+                      zip: zip || undefined,
+                    }),
+                  });
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error((data as { error?: string }).error ?? "Failed to add customer");
+                  }
+                  alert("Customer added. They will appear in the calendar once they sign up and have an install date set.");
                 } else {
-                  // Existing customer - just create the installation
-                  if (process.env.NODE_ENV === "development") {
-                    alert("Demo Mode: Installation added! (Not persisted)");
-                  } else {
-                    // Production: Create installation for existing customer
-                    const response = await fetch("/api/admin/installations", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        customerId: selectedCustomerId,
-                        address: formData.get("address"),
-                        date: formData.get("date"),
-                        time: formData.get("time"),
-                        units: formData.get("units"),
-                        status: formData.get("status"),
-                      }),
-                    });
-                    
-                    if (!response.ok) {
-                      throw new Error("Failed to create installation");
-                    }
-                    
-                    alert("Installation scheduled!");
+                  if (!selectedCustomerId) {
+                    alert("Please select a customer.");
+                    return;
                   }
+                  const installDateStr = dateVal ? new Date(dateVal).toISOString().split("T")[0] : "";
+                  const patchForm = new FormData();
+                  patchForm.append("installDate", installDateStr);
+                  patchForm.append("installAddress", addressVal);
+                  patchForm.append("notes", "");
+                  const patchRes = await fetch(`/api/admin/users/${selectedCustomerId}/install`, {
+                    method: "PATCH",
+                    body: patchForm,
+                  });
+                  if (!patchRes.ok) {
+                    const data = await patchRes.json().catch(() => ({}));
+                    throw new Error((data as { error?: string }).error ?? "Failed to update installation");
+                  }
+                  await refetchInstalls();
+                  alert("Installation scheduled!");
                 }
-                
                 setIsAddDialogOpen(false);
                 setSelectedCustomerId("");
                 setIsNewCustomer(false);
@@ -696,7 +756,7 @@ export default function AdminPage() {
                 setSelectedStatus("pending");
               } catch (error) {
                 console.error("Error:", error);
-                alert("An error occurred. Please try again.");
+                alert(error instanceof Error ? error.message : "An error occurred. Please try again.");
               }
             }}
             className="space-y-6 mt-4"
@@ -767,18 +827,70 @@ export default function AdminPage() {
                   </>
                 )}
                 
-                <div className="space-y-2">
-                  <label htmlFor="address" className="text-sm font-medium text-foreground">
-                    Address <span className="text-destructive">*</span>
-                  </label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <label htmlFor="addressStreet" className="text-sm font-medium text-foreground">
+                      Street <span className="text-destructive">*</span>
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+                      <AddressAutocomplete
+                        id="addressStreet"
+                        value={addressStreet}
+                        onChange={setAddressStreet}
+                        onPlaceSelect={({ street: s, city: c, state: st, zip: z }) => {
+                          setAddressStreet(s);
+                          setAddressCity(c);
+                          setAddressState(st);
+                          setAddressZip(z);
+                        }}
+                        onStandardizedChange={setAddInstallAddressStandardized}
+                        placeholder="Street address"
+                        required
+                        className="pl-10 h-10 rounded-lg border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 hover:border-primary/50 transition-all"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="addressCity" className="text-sm font-medium text-foreground">
+                      City <span className="text-destructive">*</span>
+                    </label>
                     <Input
-                      id="address"
-                      name="address"
-                      placeholder="Street, City, State, ZIP"
+                      id="addressCity"
+                      name="addressCity"
+                      placeholder="City"
                       required
-                      className="pl-10 h-10 rounded-lg border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 hover:border-primary/50 transition-all"
+                      value={addressCity}
+                      onChange={(e) => setAddressCity(e.target.value)}
+                      className="h-10 rounded-lg border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="addressState" className="text-sm font-medium text-foreground">
+                      State <span className="text-destructive">*</span>
+                    </label>
+                    <Input
+                      id="addressState"
+                      name="addressState"
+                      placeholder="State"
+                      required
+                      value={addressState}
+                      onChange={(e) => setAddressState(e.target.value)}
+                      className="h-10 rounded-lg border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="addressZip" className="text-sm font-medium text-foreground">
+                      ZIP <span className="text-destructive">*</span>
+                    </label>
+                    <Input
+                      id="addressZip"
+                      name="addressZip"
+                      placeholder="ZIP"
+                      required
+                      value={addressZip}
+                      onChange={(e) => setAddressZip(e.target.value)}
+                      className="h-10 rounded-lg border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
                     />
                   </div>
                 </div>

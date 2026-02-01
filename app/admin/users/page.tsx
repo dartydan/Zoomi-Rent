@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -14,127 +14,221 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, UserPlus, Mail, Phone, MapPin, Package, Calendar } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Search, UserPlus, Mail, Phone, MapPin, Package, Calendar, Check } from "lucide-react";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
 type Customer = {
   id: string;
   email: string | null;
   firstName: string | null;
   lastName: string | null;
-  phone?: string;
-  address?: string;
+  phone: string | null;
+  address: string | null;
   createdAt: number;
-  subscription?: {
-    plan: "Basic" | "Premium";
-    status: "active" | "cancelled" | "pending";
-    nextBilling?: string;
-  };
-  installDate?: string;
+  stripeCustomerId: string | null;
+  hasDefaultPaymentMethod?: boolean;
+  installDate: string | null;
+  installAddress: string | null;
+  selectedPlan: string | null;
+  /** True when added by admin and not yet signed up (no Clerk user). */
+  isPending?: boolean;
 };
 
-// Mock data for demo
-const mockCustomers: Customer[] = [
-  {
-    id: "demo_user_1",
-    email: "john.smith@example.com",
-    firstName: "John",
-    lastName: "Smith",
-    phone: "(765) 555-0123",
-    address: "123 Oak St, Muncie, IN 47302",
-    createdAt: Date.now() - 90 * 24 * 60 * 60 * 1000,
-    subscription: {
-      plan: "Premium",
-      status: "active",
-      nextBilling: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-    },
-    installDate: new Date(Date.now() - 85 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-  },
-  {
-    id: "demo_user_2",
-    email: "sarah.johnson@example.com",
-    firstName: "Sarah",
-    lastName: "Johnson",
-    phone: "(765) 555-0456",
-    address: "456 Maple Ave, Anderson, IN 46016",
-    createdAt: Date.now() - 60 * 24 * 60 * 60 * 1000,
-    subscription: {
-      plan: "Basic",
-      status: "active",
-      nextBilling: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-    },
-    installDate: new Date(Date.now() - 55 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-  },
-  {
-    id: "demo_user_3",
-    email: "michael.brown@example.com",
-    firstName: "Michael",
-    lastName: "Brown",
-    phone: "(765) 555-0789",
-    address: "789 Pine Rd, Richmond, IN 47374",
-    createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
-    subscription: {
-      plan: "Premium",
-      status: "active",
-      nextBilling: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-    },
-    installDate: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-  },
-  {
-    id: "demo_user_4",
-    email: "emily.davis@example.com",
-    firstName: "Emily",
-    lastName: "Davis",
-    phone: "(765) 555-0321",
-    address: "321 Elm St, Muncie, IN 47303",
-    createdAt: Date.now() - 15 * 24 * 60 * 60 * 1000,
-    subscription: {
-      plan: "Basic",
-      status: "pending",
-    },
-  },
-  {
-    id: "demo_user_5",
-    email: "robert.wilson@example.com",
-    firstName: "Robert",
-    lastName: "Wilson",
-    phone: "(765) 555-0654",
-    address: "654 Birch Ln, Anderson, IN 46013",
-    createdAt: Date.now() - 120 * 24 * 60 * 60 * 1000,
-    subscription: {
-      plan: "Premium",
-      status: "cancelled",
-    },
-    installDate: new Date(Date.now() - 115 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-  },
-];
+type PendingCustomer = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  address: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  createdAt: string;
+};
 
 export default function CustomersPage() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "pending" | "cancelled">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "installed" | "no_install">("all");
 
-  const customers = mockCustomers;
+  const [addCustomerOpen, setAddCustomerOpen] = useState(false);
+  const [addFirstName, setAddFirstName] = useState("");
+  const [addLastName, setAddLastName] = useState("");
+  const [addEmail, setAddEmail] = useState("");
+  const [addStreet, setAddStreet] = useState("");
+  const [addCity, setAddCity] = useState("");
+  const [addState, setAddState] = useState("");
+  const [addZip, setAddZip] = useState("");
+  const [addAddressStandardized, setAddAddressStandardized] = useState(false);
+  const [addSaving, setAddSaving] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
-  // Filter customers based on search and status
+  useEffect(() => {
+    if (addCustomerOpen) setAddAddressStandardized(false);
+  }, [addCustomerOpen]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    Promise.all([
+      fetch("/api/admin/users", { signal: controller.signal }).then((res) => {
+        if (!res.ok) return res.json().then((data) => Promise.reject(new Error((data as { error?: string }).error ?? "Failed to load")));
+        return res.json() as Promise<{ users: Customer[] }>;
+      }),
+      fetch("/api/admin/pending-customers", { signal: controller.signal }).then((res) => {
+        if (!res.ok) return { pendingCustomers: [] as PendingCustomer[] };
+        return res.json() as Promise<{ pendingCustomers: PendingCustomer[] }>;
+      }),
+    ])
+      .then(([usersData, pendingData]) => {
+        const clerkEmails = new Set((usersData.users ?? []).map((u) => (u.email ?? "").toLowerCase()));
+        const clerkList = (usersData.users ?? []).map((u) => ({
+          ...u,
+          createdAt: typeof u.createdAt === "number" ? u.createdAt : new Date(String(u.createdAt)).getTime(),
+          isPending: false as const,
+        }));
+        const pendingList = (pendingData.pendingCustomers ?? [])
+          .filter((p) => !clerkEmails.has(p.email.toLowerCase()))
+          .map((p): Customer => ({
+            id: `pending_${p.id}`,
+            email: p.email,
+            firstName: p.firstName,
+            lastName: p.lastName,
+            phone: null,
+            address: p.address,
+            createdAt: new Date(p.createdAt).getTime(),
+            stripeCustomerId: null,
+            installDate: null,
+            installAddress: null,
+            selectedPlan: null,
+            isPending: true,
+          }));
+        setCustomers([...clerkList, ...pendingList].sort((a, b) => b.createdAt - a.createdAt));
+        setError(null);
+      })
+      .catch((e) => {
+        if ((e as { name?: string }).name === "AbortError") {
+          setError("Request timed out. Check your connection and try again.");
+        } else {
+          setError(e instanceof Error ? e.message : "Failed to load customers");
+        }
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  const displayAddress = (c: Customer) => c.address ?? c.installAddress ?? null;
+
   const filteredCustomers = customers.filter((customer) => {
-    const matchesSearch = 
-      `${customer.firstName} ${customer.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch =
+      `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       customer.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      customer.phone?.includes(searchQuery);
-    
-    const matchesStatus = 
-      filterStatus === "all" || customer.subscription?.status === filterStatus;
-    
+      (customer.phone ?? "").includes(searchQuery);
+
+    const hasInstall = !!customer.installDate;
+    const matchesStatus =
+      filterStatus === "all" ||
+      (filterStatus === "installed" && hasInstall) ||
+      (filterStatus === "no_install" && !hasInstall);
+
     return matchesSearch && matchesStatus;
   });
 
-  // Calculate stats
   const totalCustomers = customers.length;
-  const activeCustomers = customers.filter(c => c.subscription?.status === "active").length;
-  const pendingCustomers = customers.filter(c => c.subscription?.status === "pending").length;
+  const withInstall = customers.filter((c) => c.installDate).length;
+  const withStripe = customers.filter((c) => c.stripeCustomerId).length;
+
+  function openAddCustomer() {
+    setAddFirstName("");
+    setAddLastName("");
+    setAddEmail("");
+    setAddStreet("");
+    setAddCity("");
+    setAddState("");
+    setAddZip("");
+    setAddError(null);
+    setAddCustomerOpen(true);
+  }
+
+  async function handleAddCustomer(e: React.FormEvent) {
+    e.preventDefault();
+    setAddError(null);
+    const firstName = addFirstName.trim();
+    const lastName = addLastName.trim();
+    const email = addEmail.trim();
+    const hasAddress = [addStreet, addCity, addState, addZip].some((s) => s.trim() !== "");
+    if (!firstName && !lastName && !email && !hasAddress) {
+      setAddError("Enter at least one field (name, email, or address).");
+      return;
+    }
+    if (hasAddress && !addAddressStandardized) {
+      setAddError("Please select an address from the suggestions to standardize it.");
+      return;
+    }
+    setAddSaving(true);
+    try {
+      const res = await fetch("/api/admin/pending-customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email,
+          street: addStreet.trim() || undefined,
+          city: addCity.trim() || undefined,
+          state: addState.trim() || undefined,
+          zip: addZip.trim() || undefined,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; pendingCustomer?: PendingCustomer };
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to add customer");
+      }
+      setAddCustomerOpen(false);
+      const created = data.pendingCustomer;
+      if (created) {
+        setCustomers((prev) => [
+          {
+            id: `pending_${created.id}`,
+            email: created.email,
+            firstName: created.firstName,
+            lastName: created.lastName,
+            phone: null,
+            address: [created.street, created.city, created.state, created.zip].filter(Boolean).join(", ") || created.address,
+            createdAt: new Date(created.createdAt).getTime(),
+            stripeCustomerId: null,
+            installDate: null,
+            installAddress: null,
+            isPending: true,
+          },
+          ...prev,
+        ]);
+      }
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : "Failed to add customer");
+    } finally {
+      setAddSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Customers</h1>
@@ -142,41 +236,148 @@ export default function CustomersPage() {
             Manage customer accounts and subscriptions
           </p>
         </div>
-        <Button>
+        <Button type="button" onClick={openAddCustomer}>
           <UserPlus className="h-4 w-4 mr-2" />
           Add Customer
         </Button>
       </div>
 
-      {/* Stats Cards */}
+      <Dialog open={addCustomerOpen} onOpenChange={setAddCustomerOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add customer</DialogTitle>
+            <DialogDescription>
+              Add as much info as you have. When they sign up with that email, name and address will pre-fill. At least one field is required.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddCustomer} className="space-y-4">
+            {addError && (
+              <p className="text-sm text-destructive" role="alert">
+                {addError}
+              </p>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="add-first-name">First name</Label>
+              <Input
+                id="add-first-name"
+                value={addFirstName}
+                onChange={(e) => setAddFirstName(e.target.value)}
+                placeholder="First name (optional)"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="add-last-name">Last name</Label>
+              <Input
+                id="add-last-name"
+                value={addLastName}
+                onChange={(e) => setAddLastName(e.target.value)}
+                placeholder="Last name (optional)"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="add-email">Email</Label>
+              <Input
+                id="add-email"
+                type="email"
+                value={addEmail}
+                onChange={(e) => setAddEmail(e.target.value)}
+                placeholder="email@example.com (optional)"
+              />
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="add-street">Street</Label>
+                <AddressAutocomplete
+                  id="add-street"
+                  value={addStreet}
+                  onChange={setAddStreet}
+                  onPlaceSelect={({ street: s, city: c, state: st, zip: z }) => {
+                    setAddStreet(s);
+                    setAddCity(c);
+                    setAddState(st);
+                    setAddZip(z);
+                  }}
+                  onStandardizedChange={setAddAddressStandardized}
+                  placeholder="Street address (optional)"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="add-city">City</Label>
+                <Input
+                  id="add-city"
+                  value={addCity}
+                  onChange={(e) => setAddCity(e.target.value)}
+                  placeholder="City (optional)"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="add-state">State</Label>
+                <Input
+                  id="add-state"
+                  value={addState}
+                  onChange={(e) => setAddState(e.target.value)}
+                  placeholder="State (optional)"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="add-zip">ZIP</Label>
+                <Input
+                  id="add-zip"
+                  value={addZip}
+                  onChange={(e) => setAddZip(e.target.value)}
+                  placeholder="ZIP (optional)"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAddCustomerOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={addSaving}>
+                {addSaving ? "Adding…" : "Add customer"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {error && (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Customers</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalCustomers}</div>
+            <div className="text-2xl font-bold">{loading ? "—" : totalCustomers}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Active Subscriptions</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">With install date</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{activeCustomers}</div>
+            <div className="text-2xl font-bold text-green-600">{loading ? "—" : withInstall}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Installs</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Stripe linked</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{pendingCustomers}</div>
+            <div className="text-2xl font-bold">{loading ? "—" : withStripe}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search and Filters */}
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row gap-4">
@@ -191,6 +392,7 @@ export default function CustomersPage() {
             </div>
             <div className="flex gap-2">
               <Button
+                type="button"
                 variant={filterStatus === "all" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setFilterStatus("all")}
@@ -198,117 +400,137 @@ export default function CustomersPage() {
                 All
               </Button>
               <Button
-                variant={filterStatus === "active" ? "default" : "outline"}
+                type="button"
+                variant={filterStatus === "installed" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setFilterStatus("active")}
+                onClick={() => setFilterStatus("installed")}
               >
-                Active
+                Installed
               </Button>
               <Button
-                variant={filterStatus === "pending" ? "default" : "outline"}
+                type="button"
+                variant={filterStatus === "no_install" ? "default" : "outline"}
                 size="sm"
-                onClick={() => setFilterStatus("pending")}
+                onClick={() => setFilterStatus("no_install")}
               >
-                Pending
-              </Button>
-              <Button
-                variant={filterStatus === "cancelled" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilterStatus("cancelled")}
-              >
-                Cancelled
+                No install
               </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-6">Customer</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Subscription</TableHead>
-                <TableHead>Install Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right pr-6">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredCustomers.length === 0 ? (
+          {loading ? (
+            <div className="py-8 text-center text-muted-foreground text-sm">
+              Loading…
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8 pl-6 pr-6">
-                    No customers found.
-                  </TableCell>
+                  <TableHead className="pl-6">Customer</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Billing</TableHead>
+                  <TableHead>Install Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right pr-6">Actions</TableHead>
                 </TableRow>
-              ) : (
-                filteredCustomers.map((customer) => (
-                  <TableRow key={customer.id} className="hover:bg-muted/50">
-                    <TableCell className="pl-6">
-                      <div className="font-medium">
-                        {customer.firstName} {customer.lastName}
-                      </div>
-                      <div className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                        <MapPin className="h-3 w-3" />
-                        {customer.address || "No address"}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-sm">
-                        <Mail className="h-3 w-3 text-muted-foreground" />
-                        {customer.email}
-                      </div>
-                      {customer.phone && (
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
-                          <Phone className="h-3 w-3" />
-                          {customer.phone}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {customer.subscription ? (
-                        <div className="flex items-center gap-2">
-                          <Package className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{customer.subscription.plan}</span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">No subscription</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {customer.installDate ? (
-                        <div className="flex items-center gap-1 text-sm">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          {customer.installDate}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">Not scheduled</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          customer.subscription?.status === "active"
-                            ? "default"
-                            : customer.subscription?.status === "pending"
-                            ? "secondary"
-                            : "outline"
-                        }
-                      >
-                        {customer.subscription?.status || "inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right pr-6">
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/admin/users/${customer.id}`}>
-                          View Details
-                        </Link>
-                      </Button>
+              </TableHeader>
+              <TableBody>
+                {filteredCustomers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8 pl-6 pr-6">
+                      No customers found.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  filteredCustomers.map((customer) => (
+                    <TableRow key={customer.id} className="hover:bg-muted/50">
+                      <TableCell className="pl-6">
+                        <div className="font-medium">
+                          {customer.isPending ? (
+                            [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "—"
+                          ) : (
+                            <Link
+                              href={`/admin/users/${customer.id}`}
+                              className="text-primary hover:underline"
+                            >
+                              {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || "—"}
+                            </Link>
+                          )}
+                        </div>
+                        <div className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          {displayAddress(customer) || "No address"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm">
+                          <Mail className="h-3 w-3 text-muted-foreground shrink-0" />
+                          {customer.email ?? "—"}
+                        </div>
+                        {customer.phone && (
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+                            <Phone className="h-3 w-3 shrink-0" />
+                            {customer.phone}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {customer.selectedPlan ?? "—"}
+                      </TableCell>
+                      <TableCell>
+                        {customer.stripeCustomerId ? (
+                          <div className="flex items-center gap-2">
+                            {customer.hasDefaultPaymentMethod ? (
+                              <Check className="h-4 w-4 text-green-600 shrink-0" aria-hidden />
+                            ) : (
+                              <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                            )}
+                            <span className="text-sm">Linked</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {customer.isPending ? (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        ) : customer.installDate ? (
+                          <div className="flex items-center gap-1 text-sm">
+                            <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
+                            {customer.installDate}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Not scheduled</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {customer.isPending ? (
+                          <Badge variant="secondary">Pending sign-up</Badge>
+                        ) : (
+                          <Badge variant={customer.installDate ? "default" : "outline"}>
+                            {customer.installDate ? "Installed" : "—"}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right pr-6">
+                        {customer.isPending ? (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        ) : (
+                          <Button type="button" variant="ghost" size="sm" asChild>
+                            <Link href={`/admin/users/${customer.id}`}>
+                              View Details
+                            </Link>
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

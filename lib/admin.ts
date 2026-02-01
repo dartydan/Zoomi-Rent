@@ -7,11 +7,6 @@ function getRole(publicMetadata: Record<string, unknown> | null): string | undef
 }
 
 export async function isAdmin(): Promise<boolean> {
-  // In development mode, allow access without authentication
-  if (process.env.NODE_ENV === "development") {
-    return true;
-  }
-  
   const { userId } = await auth();
   if (!userId) {
     return false;
@@ -24,11 +19,6 @@ export async function isAdmin(): Promise<boolean> {
  * Use in Server Components / API routes. For client, use useUser().publicMetadata?.role === "admin"
  */
 export async function requireAdmin(): Promise<{ userId: string }> {
-  // In development mode, allow access without authentication
-  if (process.env.NODE_ENV === "development") {
-    return { userId: "demo_admin" };
-  }
-  
   const { userId } = await auth();
   if (!userId) {
     throw new Error("Unauthorized");

@@ -1,15 +1,22 @@
 "use client";
 
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Sparkles } from "lucide-react";
+import { useGetStarted } from "@/components/GetStartedContext";
 
 export function SplashHero() {
+  const { openGetStarted } = useGetStarted();
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-primary/5">
-      {/* Background pattern */}
+      {/* Hero image background */}
       <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#d6d3d1_1px,transparent_1px),linear-gradient(to_bottom,#d6d3d1_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-20" />
+        <img
+          src="/hero-laundry.png"
+          alt=""
+          className="h-full w-full object-cover object-bottom"
+          aria-hidden
+        />
+        <div className="absolute inset-0 bg-black/70" aria-hidden />
       </div>
 
       {/* Decorative gradient orbs */}
@@ -32,8 +39,8 @@ export function SplashHero() {
               <span className="text-sm font-semibold text-primary">Headache-Free • We Handle Everything</span>
             </div>
             
-            <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl lg:text-7xl">
-              Washer & Dryer Rental
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
+              <span className="text-white">Washer & Dryer Rental</span>
               <span className="block text-primary mt-2">
                 Made Simple
               </span>
@@ -44,7 +51,7 @@ export function SplashHero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.15 }}
-            className="text-lg sm:text-xl md:text-2xl max-w-3xl mx-auto leading-relaxed text-muted-foreground font-medium"
+            className="text-lg sm:text-xl md:text-2xl max-w-3xl mx-auto leading-relaxed text-gray-300 font-medium"
           >
             Stop going to the laundromat. We deliver, install, service, and remove. One monthly payment. No hidden fees.
           </motion.p>
@@ -53,31 +60,16 @@ export function SplashHero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.3 }}
-            className="inline-block"
+            className="flex flex-col sm:flex-row gap-4 justify-center pt-4 pb-8"
           >
-            <div className="rounded-3xl bg-card px-8 py-5 backdrop-blur-sm border-2 border-border shadow-2xl">
-              <p className="text-4xl font-bold text-foreground sm:text-5xl">
-                $60<span className="text-xl text-muted-foreground">/mo</span>
-              </p>
-              <p className="text-sm text-muted-foreground mt-1.5 font-medium">
-                with AutoPay • No long-term contract
-              </p>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.5 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center pt-4"
-          >
-            <Link
-              href="/checklist"
+            <button
+              type="button"
+              onClick={openGetStarted}
               className="group relative inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-10 py-5 text-lg font-semibold text-primary-foreground shadow-xl shadow-primary/30 transition-all hover:scale-105 hover:shadow-2xl hover:shadow-primary/40 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-4 focus-visible:ring-offset-background"
             >
               Get Started Today
               <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-            </Link>
+            </button>
             
             <button
               onClick={() => {

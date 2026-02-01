@@ -7,21 +7,11 @@ import { EndServicesButton } from "./EndServicesButton";
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardDescription,
   CardHeader,
   CardTitle,
+  CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 
 interface Invoice {
   id: string;
@@ -38,19 +28,28 @@ interface DashboardData {
   customerId: string | null;
   invoices: Invoice[];
   nextPaymentDate: string | null;
+  nextPaymentAmount: { amount: number; currency: string } | null;
   hasActiveSubscription: boolean;
+  subscriptionLabel: string | null;
 }
 
+const CUSTOMER_PORTAL_VIEW_COOKIE = "customer_portal_view";
+
 export function DashboardContent() {
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
+    document.cookie = `${CUSTOMER_PORTAL_VIEW_COOKIE}=; path=/; max-age=0`;
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded) return;
     async function fetchData() {
-      // In development mode without auth, show mock data
+      // In development mode without auth, show mock data (only after Clerk has loaded)
       const isDevelopment = process.env.NODE_ENV === "development";
       if (isDevelopment && !user) {
         // Mock data for demo purposes
@@ -79,7 +78,9 @@ export function DashboardContent() {
             },
           ],
           nextPaymentDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days from now
+          nextPaymentAmount: { amount: 6000, currency: "usd" },
           hasActiveSubscription: true,
+          subscriptionLabel: "Washer & Dryer Rental",
         };
         setData(mockData);
         setLoading(false);
@@ -102,7 +103,9 @@ export function DashboardContent() {
             customerId: null,
             invoices: [],
             nextPaymentDate: null,
+            nextPaymentAmount: null,
             hasActiveSubscription: false,
+            subscriptionLabel: null,
           });
           setLoading(false);
           return;
@@ -116,11 +119,20 @@ export function DashboardContent() {
         const invoicesData = await invoicesRes.json();
         const subscriptionData = await subscriptionRes.json();
 
+        if (!subscriptionRes.ok) {
+          const detail = subscriptionData.details ? ` — ${subscriptionData.details}` : "";
+          setError((subscriptionData.error || "Failed to load subscription") + detail);
+          setLoading(false);
+          return;
+        }
+
         setData({
           customerId,
           invoices: invoicesData.invoices || [],
-          nextPaymentDate: subscriptionData.nextPaymentDate,
-          hasActiveSubscription: subscriptionData.hasActiveSubscription,
+          nextPaymentDate: subscriptionData.nextPaymentDate ?? null,
+          nextPaymentAmount: subscriptionData.nextPaymentAmount ?? null,
+          hasActiveSubscription: subscriptionData.hasActiveSubscription ?? false,
+          subscriptionLabel: subscriptionData.subscriptionLabel ?? null,
         });
       } catch (err) {
         setError("Failed to load dashboard");
@@ -131,7 +143,7 @@ export function DashboardContent() {
     }
 
     fetchData();
-  }, [user]);
+  }, [user, isLoaded]);
 
   const handleManageBilling = async () => {
     if (!data?.customerId) return;
@@ -184,12 +196,18 @@ export function DashboardContent() {
     );
   }
 
-  const formatNextPayment = (iso: string) =>
+  const formatNextPaymentDate = (iso: string) =>
     new Date(iso).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
     });
+
+  const formatNextPaymentAmount = (amount: number, currency: string) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(amount / 100);
 
   return (
     <div className="space-y-6">
@@ -215,122 +233,52 @@ export function DashboardContent() {
         </div>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        {data?.nextPaymentDate && (
-          <Card>
+      {data?.nextPaymentDate && (
+        <div className="grid min-w-0 gap-4 sm:grid-cols-[1fr_1fr]">
+          <Card className="min-w-0 overflow-hidden border-2 bg-gradient-to-br from-background to-muted/30">
             <CardHeader className="space-y-1">
-              <CardTitle className="text-base font-medium">
-                Next Payment Date
-              </CardTitle>
-              <CardDescription className="text-lg font-semibold text-foreground">
-                {formatNextPayment(data.nextPaymentDate)}
-              </CardDescription>
+              <CardTitle className="text-base font-medium text-muted-foreground">Next payment</CardTitle>
             </CardHeader>
+            <CardContent className="space-y-2 overflow-hidden">
+              {data.nextPaymentAmount && (
+                <p className="min-w-0 break-words text-4xl font-bold text-foreground tracking-tight">
+                  {formatNextPaymentAmount(data.nextPaymentAmount.amount, data.nextPaymentAmount.currency)}
+                </p>
+              )}
+              <p className="min-w-0 break-words text-sm text-muted-foreground">
+                Due {formatNextPaymentDate(data.nextPaymentDate)}
+              </p>
+            </CardContent>
           </Card>
-        )}
-        {data && !data.nextPaymentDate && (
-          <Card className="border-amber-500/30 bg-amber-500/10 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <Card className="min-w-0 overflow-hidden border bg-muted/30">
             <CardHeader className="space-y-1">
-              <CardTitle className="text-base font-medium text-amber-800 dark:text-amber-200">
-                No active subscription
-              </CardTitle>
-              <CardDescription className="text-amber-700 dark:text-amber-300">
-                Contact us to set up your rental.
-              </CardDescription>
+              <CardTitle className="text-base font-medium text-muted-foreground">Current Plan</CardTitle>
             </CardHeader>
+            <CardContent className="space-y-2 overflow-hidden">
+              <p className="min-w-0 break-words text-4xl font-bold text-foreground tracking-tight">
+                {data.subscriptionLabel || "Active"}
+              </p>
+            </CardContent>
           </Card>
-        )}
-      </div>
+        </div>
+      )}
 
-      <PaymentHistory invoices={data?.invoices || []} />
-
-      <Separator className="my-6" />
-
-      <section aria-labelledby="recent-activity-heading">
-        <h2 id="recent-activity-heading" className="mb-4 text-lg font-semibold text-foreground">
-          Recent activity
-        </h2>
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell>Jan 28, 2026</TableCell>
-                  <TableCell>Payment received</TableCell>
-                  <TableCell><Badge variant="secondary">Complete</Badge></TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Jan 15, 2026</TableCell>
-                  <TableCell>Invoice sent</TableCell>
-                  <TableCell><Badge variant="outline">Sent</Badge></TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Jan 1, 2026</TableCell>
-                  <TableCell>Subscription renewed</TableCell>
-                  <TableCell><Badge variant="secondary">Complete</Badge></TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+      {data && !data.nextPaymentDate && (
+        <Card className="border-2 border-amber-500/50 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/20 dark:to-amber-900/20">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-base font-medium text-amber-900 dark:text-amber-200">
+              No active subscription
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              Contact us to set up your rental.
+            </p>
           </CardContent>
         </Card>
-      </section>
+      )}
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-base font-medium">Monthly total</CardTitle>
-            <CardDescription className="text-xl font-semibold text-foreground">$60.00</CardDescription>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-base font-medium">Rental period</CardTitle>
-            <CardDescription>Current month</CardDescription>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-base font-medium">Units</CardTitle>
-            <CardDescription>1 washer, 1 dryer</CardDescription>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-base font-medium">Account</CardTitle>
-            <CardDescription>Active</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-base">Notices</CardTitle>
-          <CardDescription>Important updates and tips.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>Your next billing date is shown in the Next Payment card above.</p>
-          <p>Use Manage Billing to update payment method or view past invoices.</p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-base">Support</CardTitle>
-          <CardDescription>Get help with your rental.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Questions? Use End Services to contact us by email, or visit the Help section from the sidebar.
-          </p>
-        </CardContent>
-      </Card>
+      <PaymentHistory invoices={data?.invoices || []} />
     </div>
   );
 }

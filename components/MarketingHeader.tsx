@@ -3,13 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
+import { useGetStarted } from "@/components/GetStartedContext";
 
 type MarketingHeaderProps = {
   variant?: "default" | "checklist";
 };
 
 export function MarketingHeader({ variant = "default" }: MarketingHeaderProps) {
+  const { isSignedIn, signOut } = useAuth();
+  const { openGetStarted } = useGetStarted();
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -87,14 +91,26 @@ export function MarketingHeader({ variant = "default" }: MarketingHeaderProps) {
               >
                 Reviews
               </a>
-              <Button variant="default" size="default" className="hover:scale-105 transition-transform" asChild>
-                <Link href="/checklist">Get Started</Link>
-              </Button>
+              {isSignedIn ? (
+                <Button variant="default" size="default" className="hover:scale-105 transition-transform" asChild>
+                  <Link href="/dashboard">Dashboard</Link>
+                </Button>
+              ) : (
+                <Button variant="default" size="default" className="hover:scale-105 transition-transform" onClick={openGetStarted}>
+                  Get Started
+                </Button>
+              )}
             </>
           )}
-          <Button variant="default" size="default" className="bg-foreground text-background hover:bg-foreground/90" asChild>
-            <Link href="/login">Login</Link>
-          </Button>
+          {isSignedIn ? (
+            <Button variant="default" size="default" className="bg-foreground text-background hover:bg-foreground/90" onClick={() => signOut({ redirectUrl: "/" })}>
+              Log out
+            </Button>
+          ) : (
+            <Button variant="default" size="default" className="bg-foreground text-background hover:bg-foreground/90" asChild>
+              <Link href="/login">Login</Link>
+            </Button>
+          )}
         </nav>
       </div>
     </header>

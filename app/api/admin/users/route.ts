@@ -1,8 +1,15 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import Stripe from "stripe";
 import { requireAdmin } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
+
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
+  return new Stripe(key);
+}
 
 export async function GET() {
   try {
@@ -13,13 +20,56 @@ export async function GET() {
 
   try {
     const { data: users } = await clerkClient.users.getUserList({ limit: 100 });
-    const list = users.map((u) => ({
-      id: u.id,
-      email: u.emailAddresses[0]?.emailAddress ?? null,
-      firstName: u.firstName,
-      lastName: u.lastName,
-      createdAt: u.createdAt,
-    }));
+    let stripe: Stripe | null = null;
+    try {
+      if (process.env.STRIPE_SECRET_KEY) stripe = getStripe();
+    } catch {
+      // Stripe not configured or invalid; continue without payment method check
+    }
+
+    const list = await Promise.all(
+      users.map(async (u) => {
+        const install = (u.publicMetadata?.install ?? {}) as { installDate?: string; installAddress?: string };
+        const customerProfile = (u.publicMetadata?.customerProfile ?? {}) as Record<string, unknown>;
+        const stripeCustomerId = (u.publicMetadata?.stripeCustomerId as string) ?? null;
+
+        let hasDefaultPaymentMethod = false;
+        if (stripe && stripeCustomerId) {
+          try {
+            const timeoutMs = 2000;
+            const customer = await Promise.race([
+              stripe.customers.retrieve(stripeCustomerId),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("timeout")), timeoutMs)
+              ),
+            ]);
+            if (!customer.deleted) {
+              const pm = (customer as Stripe.Customer).invoice_settings?.default_payment_method;
+              const legacy = (customer as Stripe.Customer).default_source;
+              hasDefaultPaymentMethod = !!(pm ?? legacy);
+            }
+          } catch {
+            // Timeout, deleted, or invalid; leave hasDefaultPaymentMethod false
+          }
+        }
+
+        return {
+          id: u.id,
+          email: u.emailAddresses[0]?.emailAddress ?? null,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          createdAt: u.createdAt,
+          stripeCustomerId,
+          hasDefaultPaymentMethod,
+          installDate: install.installDate ?? null,
+          installAddress: install.installAddress ?? null,
+          phone: (customerProfile.phone as string) ?? null,
+          address: (customerProfile.address as string) ?? null,
+          selectedPlan: (customerProfile.selectedPlan as string) ?? null,
+        };
+      })
+    );
+
     return NextResponse.json({ users: list });
   } catch (err) {
     console.error("Admin users list error:", err);

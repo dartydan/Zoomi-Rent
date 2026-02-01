@@ -94,6 +94,22 @@ If you already have Stripe customers:
 
 ---
 
+## 9. Google Address Autocomplete (optional)
+
+Address autocomplete is used in the Get Started form and admin address forms (Add Customer, Install address, Add Installation). Without a key, the Street field works as a normal text input.
+
+**Checklist:**
+
+- [ ] Go to [Google Cloud Console](https://console.cloud.google.com/) and create or select a project.
+- [ ] Enable **Maps JavaScript API** and **Places API** (APIs & Services → Library → search and enable both).
+- [ ] Create an API key (APIs & Services → Credentials → Create credentials → API key).
+- [ ] Restrict the key: **Application restrictions** → HTTP referrers → add `https://yourdomain.com/*` and `http://localhost:*` (or your dev URL).
+- [ ] **API restrictions** → Restrict key → select “Maps JavaScript API” and “Places API”.
+- [ ] Add to `.env.local`: `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_key_here`.
+- [ ] Restart the dev server so the env var is picked up.
+
+---
+
 ## Quick Reference
 
 | What              | Where                                      |

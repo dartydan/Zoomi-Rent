@@ -2,29 +2,59 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { DollarSign, Calendar, Package, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink } from "lucide-react";
+import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink } from "lucide-react";
 import type { InstallInfo } from "@/lib/install";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 
-type CustomerData = {
-  firstName: string;
-  lastName: string;
-  email: string;
+type CustomerProfile = {
+  firstName?: string;
+  lastName?: string;
+  address?: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
   phone?: string;
-  subscription?: {
-    plan: "Basic" | "Premium";
-    status: "active" | "cancelled" | "pending";
-    startDate: string;
-    monthlyRate: number;
+  email?: string;
+  desiredInstallTime?: string;
+  housingType?: string;
+  selectedPlan?: string;
+} | null;
+
+function parseInstallAddress(s: string | undefined): { street: string; city: string; state: string; zip: string } {
+  if (!s || !s.trim()) return { street: "", city: "", state: "", zip: "" };
+  const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return { street: "", city: "", state: "", zip: "" };
+  if (parts.length === 1) return { street: parts[0], city: "", state: "", zip: "" };
+  if (parts.length === 2) return { street: parts[0], city: parts[1], state: "", zip: "" };
+  const last = parts[parts.length - 1];
+  const spaceIdx = last.lastIndexOf(" ");
+  const state = spaceIdx > 0 ? last.slice(0, spaceIdx).trim() : last;
+  const zip = spaceIdx > 0 ? last.slice(spaceIdx + 1).trim() : "";
+  if (parts.length === 3) return { street: parts[0], city: parts[1], state, zip };
+  return {
+    street: parts.slice(0, -2).join(", "),
+    city: parts[parts.length - 2],
+    state,
+    zip,
   };
-  lifetimeValue: number;
-  totalPayments: number;
-  accountAge: number; // in days
-};
+}
+
+function combineInstallAddress(parts: { street: string; city: string; state: string; zip: string }): string {
+  const { street, city, state, zip } = parts;
+  const arr = [street.trim(), city.trim(), state.trim(), zip.trim()].filter(Boolean);
+  if (arr.length === 0) return "";
+  if (arr.length === 1) return arr[0];
+  if (arr.length === 2) return `${arr[0]}, ${arr[1]}`;
+  if (arr.length === 3) return `${arr[0]}, ${arr[1]}, ${arr[2]}`;
+  return `${arr[0]}, ${arr[1]}, ${arr[2]} ${arr[3]}`;
+}
 
 export default function AdminUserInstallPage() {
   const params = useParams();
@@ -36,133 +66,40 @@ export default function AdminUserInstallPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [installDate, setInstallDate] = useState("");
-  const [installAddress, setInstallAddress] = useState("");
+  const [installStreet, setInstallStreet] = useState("");
+  const [installCity, setInstallCity] = useState("");
+  const [installState, setInstallState] = useState("");
+  const [installZip, setInstallZip] = useState("");
+  const [installAddressStandardized, setInstallAddressStandardized] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(false);
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
   const [existingPhotoUrls, setExistingPhotoUrls] = useState<string[]>([]);
   const [contracts, setContracts] = useState<File[]>([]);
   const [existingContractUrls, setExistingContractUrls] = useState<string[]>([]);
-  const [customerData, setCustomerData] = useState<CustomerData | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<CustomerProfile>(null);
+  const [lifetimeValue, setLifetimeValue] = useState<number>(0);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        // In development mode, return mock data for demo users
-        const isDevelopment = process.env.NODE_ENV === "development";
-        if (isDevelopment && userId.startsWith("demo_user_")) {
-          const mockInstall: InstallInfo = {
-            installDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-            installAddress: "123 Main St, Muncie, IN 47302",
-            notes: "Demo user - units installed successfully. Customer requested second floor installation.",
-            photoUrls: [
-              "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400",
-              "https://images.unsplash.com/photo-1556911220-bff31c812dba?w=400",
-            ],
-            contractUrls: [],
-          };
-          
-          // Mock customer data based on userId
-          const mockCustomers: Record<string, CustomerData> = {
-            demo_user_1: {
-              firstName: "John",
-              lastName: "Smith",
-              email: "john.smith@example.com",
-              phone: "(765) 555-0123",
-              subscription: {
-                plan: "Premium",
-                status: "active",
-                startDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                monthlyRate: 80,
-              },
-              lifetimeValue: 240, // 3 months at $80/month
-              totalPayments: 3,
-              accountAge: 90,
-            },
-            demo_user_2: {
-              firstName: "Sarah",
-              lastName: "Johnson",
-              email: "sarah.johnson@example.com",
-              phone: "(765) 555-0456",
-              subscription: {
-                plan: "Basic",
-                status: "active",
-                startDate: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                monthlyRate: 60,
-              },
-              lifetimeValue: 120, // 2 months at $60/month
-              totalPayments: 2,
-              accountAge: 60,
-            },
-            demo_user_3: {
-              firstName: "Michael",
-              lastName: "Brown",
-              email: "michael.brown@example.com",
-              phone: "(765) 555-0789",
-              subscription: {
-                plan: "Premium",
-                status: "active",
-                startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                monthlyRate: 80,
-              },
-              lifetimeValue: 80, // 1 month at $80/month
-              totalPayments: 1,
-              accountAge: 30,
-            },
-            demo_user_4: {
-              firstName: "Emily",
-              lastName: "Davis",
-              email: "emily.davis@example.com",
-              phone: "(765) 555-0321",
-              subscription: {
-                plan: "Basic",
-                status: "pending",
-                startDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                monthlyRate: 60,
-              },
-              lifetimeValue: 0, // No payments yet
-              totalPayments: 0,
-              accountAge: 15,
-            },
-            demo_user_5: {
-              firstName: "Robert",
-              lastName: "Wilson",
-              email: "robert.wilson@example.com",
-              phone: "(765) 555-0654",
-              subscription: {
-                plan: "Premium",
-                status: "cancelled",
-                startDate: new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-                monthlyRate: 80,
-              },
-              lifetimeValue: 320, // 4 months at $80/month
-              totalPayments: 4,
-              accountAge: 120,
-            },
-          };
-          
-          if (cancelled) return;
-          setData(mockInstall);
-          setCustomerData(mockCustomers[userId] || null);
-          setInstallDate(mockInstall.installDate ?? "");
-          setInstallAddress(mockInstall.installAddress ?? "");
-          setNotes(mockInstall.notes ?? "");
-          setExistingPhotoUrls(mockInstall.photoUrls ?? []);
-          setExistingContractUrls(mockInstall.contractUrls ?? []);
-          setLoading(false);
-          return;
-        }
-
         const res = await fetch(`/api/admin/users/${userId}/install`);
         if (!res.ok) throw new Error("Failed to load");
-        const install = (await res.json()) as InstallInfo;
+        const json = (await res.json()) as InstallInfo & { customerProfile?: CustomerProfile; lifetimeValue?: number };
         if (cancelled) return;
-        setData(install);
-        setInstallDate(install.installDate ?? "");
-        setInstallAddress(install.installAddress ?? "");
-        setNotes(install.notes ?? "");
-        setExistingPhotoUrls(install.photoUrls ?? []);
-        setExistingContractUrls(install.contractUrls ?? []);
+        setData(json);
+        setCustomerProfile(json.customerProfile ?? null);
+        setLifetimeValue(typeof json.lifetimeValue === "number" ? json.lifetimeValue : 0);
+        setInstallDate(json.installDate ?? "");
+        const parsed = parseInstallAddress(json.installAddress ?? "");
+        setInstallStreet(parsed.street);
+        setInstallCity(parsed.city);
+        setInstallState(parsed.state);
+        setInstallZip(parsed.zip);
+        setNotes(json.notes ?? "");
+        setExistingPhotoUrls(json.photoUrls ?? []);
+        setExistingContractUrls(json.contractUrls ?? []);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
       } finally {
@@ -177,42 +114,25 @@ export default function AdminUserInstallPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const hasInstallAddress = [installStreet, installCity, installState, installZip].some((s) => s.trim() !== "");
+    if (editingAddress && hasInstallAddress && !installAddressStandardized) {
+      setError("Please select an address from the suggestions to standardize it.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      // In demo mode, simulate save without API call
-      const isDevelopment = process.env.NODE_ENV === "development";
-      if (isDevelopment && userId.startsWith("demo_user_")) {
-        await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate network delay
-        
-        // Simulate file upload by converting files to object URLs
-        const newPhotoUrls = photos.map(file => URL.createObjectURL(file));
-        const allPhotoUrls = [...existingPhotoUrls, ...newPhotoUrls];
-        
-        const newContractUrls = contracts.map(file => URL.createObjectURL(file));
-        const allContractUrls = [...existingContractUrls, ...newContractUrls];
-        
-        const updated: InstallInfo = {
-          installDate: installDate || undefined,
-          installAddress: installAddress || undefined,
-          notes: notes || undefined,
-          photoUrls: allPhotoUrls.length ? allPhotoUrls : undefined,
-          contractUrls: allContractUrls.length ? allContractUrls : undefined,
-        };
-        setData(updated);
-        setExistingPhotoUrls(allPhotoUrls);
-        setExistingContractUrls(allContractUrls);
-        setPhotos([]);
-        setContracts([]);
-        alert("Demo Mode: Changes saved locally (not persisted)");
-        setSaving(false);
-        return;
-      }
-
-      // Production: Upload files to server
       const formData = new FormData();
       formData.append("installDate", installDate || "");
-      formData.append("installAddress", installAddress || "");
+      formData.append(
+        "installAddress",
+        combineInstallAddress({
+          street: installStreet,
+          city: installCity,
+          state: installState,
+          zip: installZip,
+        })
+      );
       formData.append("notes", notes || "");
       
       // Add existing photo URLs
@@ -248,12 +168,17 @@ export default function AdminUserInstallPage() {
       const updated = (await res.json()) as InstallInfo;
       setData(updated);
       setInstallDate(updated.installDate ?? "");
-      setInstallAddress(updated.installAddress ?? "");
+      const parsed = parseInstallAddress(updated.installAddress ?? "");
+      setInstallStreet(parsed.street);
+      setInstallCity(parsed.city);
+      setInstallState(parsed.state);
+      setInstallZip(parsed.zip);
       setNotes(updated.notes ?? "");
       setExistingPhotoUrls(updated.photoUrls ?? []);
       setExistingContractUrls(updated.contractUrls ?? []);
       setPhotos([]);
       setContracts([]);
+      setEditingAddress(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save");
     } finally {
@@ -287,34 +212,91 @@ export default function AdminUserInstallPage() {
     setExistingContractUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[200px] items-center justify-center">
-        <p className="text-muted-foreground">Loading…</p>
-      </div>
-    );
-  }
+  const displayName =
+    customerProfile?.firstName && customerProfile?.lastName
+      ? `${customerProfile.firstName} ${customerProfile.lastName}`
+      : "Customer Details";
+  const displayAddress = combineInstallAddress({
+    street: installStreet,
+    city: installCity,
+    state: installState,
+    zip: installZip,
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => router.push("/admin/users")}
-          className="text-primary"
+          className="text-primary w-fit"
         >
           ← Back to Customers
         </Button>
-        <h1 className="text-2xl font-bold text-foreground">
-          {customerData ? `${customerData.firstName} ${customerData.lastName}` : "Customer Details"}
-        </h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold text-foreground">
+            {loading ? "Customer Details" : displayName}
+          </h1>
+          {customerProfile?.selectedPlan && (
+            <Badge variant="secondary" className="text-sm font-medium">
+              {customerProfile.selectedPlan}
+            </Badge>
+          )}
+        </div>
       </div>
 
-      {/* Customer Overview */}
-      {customerData && (
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Customer Info Card */}
+      {loading ? (
+        <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-border bg-muted/30 p-8">
+          <p className="text-muted-foreground">Loading…</p>
+        </div>
+      ) : error && !data && !customerProfile ? (
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => {
+                setError(null);
+                setLoading(true);
+                fetch(`/api/admin/users/${userId}/install`)
+                  .then((res) => {
+                    if (!res.ok) throw new Error("Failed to load");
+                    return res.json();
+                  })
+                  .then((json: InstallInfo & { customerProfile?: CustomerProfile; lifetimeValue?: number }) => {
+                    setData(json);
+                    setCustomerProfile(json.customerProfile ?? null);
+                    setLifetimeValue(typeof json.lifetimeValue === "number" ? json.lifetimeValue : 0);
+                    setInstallDate(json.installDate ?? "");
+                    const parsed = parseInstallAddress(json.installAddress ?? "");
+                    setInstallStreet(parsed.street);
+                    setInstallCity(parsed.city);
+                    setInstallState(parsed.state);
+                    setInstallZip(parsed.zip);
+                    setNotes(json.notes ?? "");
+                    setExistingPhotoUrls(json.photoUrls ?? []);
+                    setExistingContractUrls(json.contractUrls ?? []);
+                  })
+                  .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
+                  .finally(() => setLoading(false));
+              }}
+            >
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+      {/* Customer Overview: show when we have profile (from API) or install data */}
+      {(customerProfile || data) && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* Customer Info Card (from Get Started / Clerk) */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Customer Information</CardTitle>
@@ -323,92 +305,91 @@ export default function AdminUserInstallPage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span>{customerData.email}</span>
+                  <span>{customerProfile?.email ?? "—"}</span>
                 </div>
-                {customerData.phone && (
+                {customerProfile?.phone && (
                   <div className="flex items-center gap-2 text-sm">
                     <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{customerData.phone}</span>
+                    <span>{customerProfile.phone}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span>Customer for {Math.floor(customerData.accountAge / 30)} months</span>
-                </div>
               </div>
-              
-              <Separator />
-              
-              {customerData.subscription && (
+            </CardContent>
+          </Card>
+
+          {/* Contact & property (Get Started info) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Contact & property</CardTitle>
+              <CardDescription>From Get Started form</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {customerProfile?.street ||
+                customerProfile?.city ||
+                customerProfile?.state ||
+                customerProfile?.zip ||
+                customerProfile?.address ||
+                customerProfile?.desiredInstallTime ||
+                customerProfile?.housingType ? (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Package className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">Subscription</span>
+                  {(customerProfile?.street ||
+                    customerProfile?.city ||
+                    customerProfile?.state ||
+                    customerProfile?.zip ||
+                    customerProfile?.address) && (
+                    <div className="flex items-start gap-2 text-sm">
+                      <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                      <span>
+                        {[customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip]
+                          .filter(Boolean)
+                          .join(", ") ||
+                          customerProfile?.address}
+                      </span>
                     </div>
-                    <Badge
-                      variant={
-                        customerData.subscription.status === "active"
-                          ? "default"
-                          : customerData.subscription.status === "pending"
-                          ? "secondary"
-                          : "outline"
-                      }
-                    >
-                      {customerData.subscription.status}
-                    </Badge>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {customerData.subscription.plan} - ${customerData.subscription.monthlyRate}/month
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Started: {new Date(customerData.subscription.startDate).toLocaleDateString()}
-                  </div>
+                  )}
+                  {customerProfile?.desiredInstallTime && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span>Desired install: {customerProfile.desiredInstallTime}</span>
+                    </div>
+                  )}
+                  {customerProfile?.housingType && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Housing:</span>
+                      <span>{customerProfile.housingType === "own" ? "I own my home" : "Renting"}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No Get Started info yet</p>
+              )}
+              {data?.propertyId && (
+                <div className="flex items-center gap-2 text-sm pt-2 border-t border-border mt-2">
+                  <span className="text-muted-foreground">Linked property:</span>
+                  <Link
+                    href="/admin/property"
+                    className="text-primary font-mono text-xs hover:underline"
+                  >
+                    {data.propertyId}
+                    <ExternalLink className="h-3 w-3 inline ml-0.5" />
+                  </Link>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Lifetime Value Card */}
+          {/* Lifetime Value */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Lifetime Value</CardTitle>
               <CardDescription>Total revenue from this customer</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               <div className="flex items-baseline gap-2">
-                <DollarSign className="h-5 w-5 text-green-600" />
-                <span className="text-3xl font-bold text-green-600">
-                  ${customerData.lifetimeValue.toFixed(2)}
+                <DollarSign className="h-5 w-5 text-muted-foreground" />
+                <span className="text-2xl font-bold text-foreground">
+                  ${lifetimeValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
-              </div>
-              
-              <Separator />
-              
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <div className="flex justify-between">
-                  <span>Total Payments:</span>
-                  <span className="font-medium text-foreground">{customerData.totalPayments}</span>
-                </div>
-                {customerData.subscription && (
-                  <>
-                    <div className="flex justify-between">
-                      <span>Monthly Rate:</span>
-                      <span className="font-medium text-foreground">
-                        ${customerData.subscription.monthlyRate}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Average per Month:</span>
-                      <span className="font-medium text-foreground">
-                        ${customerData.accountAge > 0 
-                          ? ((customerData.lifetimeValue / customerData.accountAge) * 30).toFixed(2)
-                          : "0.00"
-                        }
-                      </span>
-                    </div>
-                  </>
-                )}
               </div>
             </CardContent>
           </Card>
@@ -440,17 +421,53 @@ export default function AdminUserInstallPage() {
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="installAddress" className="text-sm font-medium text-foreground">
-                Install address
-              </label>
-              <Input
-                id="installAddress"
-                type="text"
-                value={installAddress}
-                onChange={(e) => setInstallAddress(e.target.value)}
-                placeholder="Street, city, state, ZIP"
-                className="w-full"
-              />
+              <span className="text-sm font-medium text-foreground">Address</span>
+              {editingAddress ? (
+                <div className="space-y-2">
+                  <AddressAutocomplete
+                    key="install-address"
+                    id="installAddress"
+                    value={displayAddress}
+                    onChange={(v) => {
+                      setInstallStreet(v);
+                      setInstallCity("");
+                      setInstallState("");
+                      setInstallZip("");
+                    }}
+                    onPlaceSelect={({ street: s, city: c, state: st, zip: z }) => {
+                      setInstallStreet(s);
+                      setInstallCity(c);
+                      setInstallState(st);
+                      setInstallZip(z);
+                    }}
+                    onStandardizedChange={setInstallAddressStandardized}
+                    placeholder="Start typing address..."
+                    className="w-full"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingAddress(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-foreground">
+                    {displayAddress || "—"}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingAddress(true)}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <label htmlFor="notes" className="text-sm font-medium text-foreground">
@@ -656,6 +673,8 @@ export default function AdminUserInstallPage() {
           </CardContent>
         </Card>
       </form>
+      </>
+      )}
     </div>
   );
 }

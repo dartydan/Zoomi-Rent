@@ -4,29 +4,29 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { MarketingHeader } from "@/components/MarketingHeader";
 import { SplashHero } from "@/components/SplashHero";
-import { ValuePropsSection } from "@/components/ValuePropsSection";
 import { BenefitsWithIcons } from "@/components/BenefitsWithIcons";
 import { TestimonialsCarousel } from "@/components/TestimonialsCarousel";
 import { PricingCalculator } from "@/components/PricingCalculator";
 import { HowItWorksTimeline } from "@/components/HowItWorksTimeline";
 import { Button } from "@/components/ui/button";
+import { useGetStarted } from "@/components/GetStartedContext";
 
 function PhotoGallerySection() {
   const photos = [
     {
-      url: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=800&auto=format&fit=crop",
+      url: "/washerdryer.webp",
       alt: "Modern apartment with washer and dryer",
       caption: "Premium units for any space"
     },
     {
-      url: "https://images.unsplash.com/photo-1556911220-bff31c812dba?w=800&auto=format&fit=crop",
+      url: "/install.jpg",
       alt: "Washer and dryer installation in apartment",
       caption: "Professional installation"
     },
     {
-      url: "https://images.unsplash.com/photo-1604709177225-055f99402ea3?w=800&auto=format&fit=crop",
+      url: "/clean-design.png",
       alt: "Clean laundry room setup",
-      caption: "Clean, efficient design"
+      caption: "Relax, no headache"
     },
   ];
 
@@ -149,32 +149,32 @@ function TestimonialsSection() {
 }
 
 function CTASection() {
+  const { openGetStarted } = useGetStarted();
   return (
-    <section className="px-4 py-20 sm:py-24">
-      <div className="mx-auto max-w-4xl">
+    <section className="px-4 py-16 sm:py-20">
+      <div className="mx-auto max-w-5xl">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          whileInView={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/80 px-8 py-16 sm:px-16 shadow-2xl"
+          className="rounded-2xl bg-gradient-to-br from-gray-900 to-gray-800 px-8 py-16 sm:px-16 text-center space-y-8"
         >
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30" />
-          <div className="relative text-center space-y-6">
-            <h2 className="text-3xl font-bold tracking-tight text-primary-foreground sm:text-4xl">
-              Stop Going to the Laundromat Today
+          <div className="space-y-4">
+            <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl md:text-5xl">
+              Ready to simplify your laundry?
             </h2>
-            <p className="text-lg text-primary-foreground/90 max-w-2xl mx-auto">
-              Join hundreds of satisfied customers enjoying hassle-free laundry at home. We deliver, install, service, and remove.
+            <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto">
+              Stop wasting time at the laundromat. Get started today with flexible month-to-month plans.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <Button size="lg" variant="secondary" className="text-base px-8 hover:scale-105 transition-transform" asChild>
-                <Link href="/checklist">Get Started</Link>
-              </Button>
-              <Button size="lg" variant="outline" className="text-base px-8 bg-white/10 border-white/20 text-primary-foreground hover:bg-white/20 hover:text-primary-foreground hover:scale-105 transition-transform" asChild>
-                <Link href="/checklist">Learn More</Link>
-              </Button>
-            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button size="lg" className="text-base px-10 py-6 text-lg hover:scale-105 transition-transform" onClick={openGetStarted}>
+              Get Started Today
+            </Button>
+            <Button size="lg" variant="outline" className="text-base px-10 py-6 text-lg hover:scale-105 transition-transform bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white" asChild>
+              <Link href="#pricing">View Pricing</Link>
+            </Button>
           </div>
         </motion.div>
       </div>
@@ -201,25 +201,10 @@ function MarketingFooter() {
 }
 
 export default function Home() {
-  const isDevelopment = process.env.NODE_ENV === 'development';
-
   return (
     <div className="min-h-screen bg-background">
       <MarketingHeader />
-      {isDevelopment && (
-        <div className="bg-yellow-500/10 border-b border-yellow-500/20 px-4 py-2">
-          <div className="max-w-6xl mx-auto flex items-center justify-center gap-4">
-            <span className="text-sm text-yellow-700 dark:text-yellow-400 font-medium">
-              Development Mode
-            </span>
-            <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
-              <Link href="/playground">View Playground</Link>
-            </Button>
-          </div>
-        </div>
-      )}
       <SplashHero />
-      <ValuePropsSection />
       <div id="benefits">
         <BenefitsWithIcons />
       </div>

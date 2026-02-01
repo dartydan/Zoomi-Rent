@@ -14,6 +14,7 @@ cp .env.example .env.local
 
 - **Clerk**: Create an account at [clerk.com](https://clerk.com), create an application, and add your keys. In the Clerk Dashboard, configure **User & authentication** to use **Email verification link** (magic link) only.
 - **Stripe**: Add your publishable key (client-side) and secret key (server-side). Get both from [Stripe Dashboard → Developers → API keys](https://dashboard.stripe.com/apikeys).
+- **Google Maps (optional, for address autocomplete)**: Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to enable address autocomplete in the Get Started form. In [Google Cloud Console](https://console.cloud.google.com/), enable **Maps JavaScript API** and **Places API**, create an API key, and restrict it to **HTTP referrers** (e.g. `https://yourdomain.com/*`, `http://localhost:*`) and to those two APIs. Without the key, the address field works as a normal text input.
 
 ### 2. Stripe Customer Portal
 

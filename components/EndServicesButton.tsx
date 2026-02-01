@@ -7,7 +7,12 @@ const END_SERVICES_MAILTO =
 
 export function EndServicesButton() {
   return (
-    <Button variant="outline" size="lg" asChild>
+    <Button
+      variant="outline"
+      size="lg"
+      asChild
+      className="hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors"
+    >
       <a href={END_SERVICES_MAILTO}>End Services</a>
     </Button>
   );

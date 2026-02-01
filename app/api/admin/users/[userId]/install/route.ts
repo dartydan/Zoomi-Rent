@@ -1,5 +1,6 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
 import { requireAdmin } from "@/lib/admin";
 import type { InstallInfo } from "@/lib/install";
 import { INSTALL_METADATA_KEY } from "@/lib/install";
@@ -11,6 +12,29 @@ import {
 } from "@/lib/google-drive";
 
 export const dynamic = "force-dynamic";
+
+function getStripe(): Stripe | null {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return null;
+  return new Stripe(key);
+}
+
+/** Sum of all paid Stripe invoices for the customer (lifetime value in dollars). */
+async function computeLifetimeValue(stripeCustomerId: string): Promise<number> {
+  const stripe = getStripe();
+  if (!stripe) return 0;
+  try {
+    const invoices = await stripe.invoices.list({
+      customer: stripeCustomerId,
+      status: "paid",
+      limit: 100,
+    });
+    const totalCents = invoices.data.reduce((sum, inv) => sum + (inv.amount_paid ?? 0), 0);
+    return totalCents / 100;
+  } catch {
+    return 0;
+  }
+}
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -38,7 +62,18 @@ export async function GET(
     const { userId } = await params;
     const user = await clerkClient.users.getUser(userId);
     const install = (user.publicMetadata?.[INSTALL_METADATA_KEY] ?? {}) as InstallInfo;
-    return NextResponse.json(install);
+    const customerProfile = user.publicMetadata?.customerProfile as Record<string, unknown> | undefined;
+    const profileAddress = (customerProfile?.address as string) ?? undefined;
+    const installAddress = install.installAddress ?? profileAddress;
+    const stripeCustomerId = user.publicMetadata?.stripeCustomerId as string | undefined;
+    const lifetimeValue =
+      stripeCustomerId != null ? await computeLifetimeValue(stripeCustomerId) : 0;
+    return NextResponse.json({
+      ...install,
+      installAddress: installAddress ?? undefined,
+      customerProfile: customerProfile ?? null,
+      lifetimeValue,
+    });
   } catch (err) {
     console.error("Admin get install error:", err);
     return NextResponse.json(
@@ -158,6 +193,7 @@ export async function PATCH(
       photoUrls: photoUrls.length ? photoUrls : undefined,
       contractUrls: contractUrls.length ? contractUrls : undefined,
       driveFolderId: driveFolderId ?? existing.driveFolderId,
+      propertyId: existing.propertyId,
     };
 
     await clerkClient.users.updateUserMetadata(userId, {

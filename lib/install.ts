@@ -8,6 +8,7 @@ export type InstallInfo = {
   photoUrls?: string[]; // Google Drive view URLs
   contractUrls?: string[]; // Google Drive view URLs
   driveFolderId?: string; // Customer's folder ID in Drive
+  propertyId?: string; // Admin-assigned property (asset) tied to this install
 };
 
 export const INSTALL_METADATA_KEY = "install" as const;

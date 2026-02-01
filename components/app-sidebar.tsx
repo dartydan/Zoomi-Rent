@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth, useClerk, useUser } from "@clerk/nextjs";
-import { Home, LogIn, LogOut, Users, Building, DollarSign, BarChart3 } from "lucide-react";
+import { Home, LogIn, LogOut, Users, Building, DollarSign, BarChart3, LayoutDashboard } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -17,14 +17,27 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
+const CUSTOMER_PORTAL_VIEW_COOKIE = "customer_portal_view";
+
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { isSignedIn } = useAuth();
   const { signOut } = useClerk();
   const { user } = useUser();
   const isDevelopment = process.env.NODE_ENV === "development";
   const isAdminUser = (user?.publicMetadata?.role as string | undefined) === "admin" || (isDevelopment && pathname.startsWith("/admin"));
   const isAdminSection = pathname.startsWith("/admin");
+
+  function openCustomerPortal() {
+    document.cookie = `${CUSTOMER_PORTAL_VIEW_COOKIE}=true; path=/; max-age=60`;
+    window.location.href = "/dashboard";
+  }
+
+  function goToAdmin() {
+    document.cookie = `${CUSTOMER_PORTAL_VIEW_COOKIE}=; path=/; max-age=0`;
+    router.push("/admin");
+  }
 
   // If in admin section, show admin-specific nav
   if (isAdminSection && isAdminUser) {
@@ -80,7 +93,19 @@ export function AppSidebar() {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter>
-          <p className="px-2 text-xs text-muted-foreground">Admin Dashboard</p>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton onClick={openCustomerPortal} className="gap-2">
+                    <LayoutDashboard className="h-4 w-4" />
+                    <span>View customer portal</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <p className="px-2 pt-2 text-xs text-muted-foreground">Admin Dashboard</p>
         </SidebarFooter>
       </Sidebar>
     );
@@ -136,7 +161,21 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <p className="px-2 text-xs text-muted-foreground">Washer &amp; dryer rental</p>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {isSignedIn && isAdminUser && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton onClick={goToAdmin} className="gap-2">
+                    <LayoutDashboard className="h-4 w-4" />
+                    <span>Admin dashboard</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <p className="px-2 pt-2 text-xs text-muted-foreground">Washer &amp; dryer rental</p>
       </SidebarFooter>
     </Sidebar>
   );

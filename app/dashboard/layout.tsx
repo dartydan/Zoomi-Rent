@@ -1,28 +1,23 @@
-"use client";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { isAdmin } from "@/lib/admin";
+import { DashboardLayoutClient } from "./layout-client";
 
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { AppSidebar } from "@/components/app-sidebar";
-import { UserButton } from "@clerk/nextjs";
+export const dynamic = "force-dynamic";
 
-export default function DashboardLayout({
+const CUSTOMER_PORTAL_VIEW_COOKIE = "customer_portal_view";
+
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <TooltipProvider>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <header className="flex h-12 shrink-0 items-center gap-4 border-b border-border px-4">
-            <SidebarTrigger className="-ml-1" />
-            <div className="flex flex-1 items-center gap-2" />
-            <UserButton afterSignOutUrl="/" />
-          </header>
-          <div className="flex-1 overflow-auto p-4 sm:p-6">{children}</div>
-        </SidebarInset>
-      </SidebarProvider>
-    </TooltipProvider>
-  );
+  const ok = await isAdmin();
+  if (ok) {
+    const cookieStore = await cookies();
+    const viewCustomer = cookieStore.get(CUSTOMER_PORTAL_VIEW_COOKIE)?.value === "true";
+    if (!viewCustomer) redirect("/admin");
+  }
+
+  return <DashboardLayoutClient>{children}</DashboardLayoutClient>;
 }

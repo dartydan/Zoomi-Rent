@@ -4,8 +4,8 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
 import { Zap } from "lucide-react";
+import { useGetStarted } from "@/components/GetStartedContext";
 
 type Plan = {
   id: string;
@@ -34,6 +34,7 @@ const plans: Plan[] = [
 export function PricingCalculator() {
   const [selectedPlan, setSelectedPlan] = useState<string>("premium");
   const [useAutoPay, setUseAutoPay] = useState<boolean>(true);
+  const { openGetStarted } = useGetStarted();
 
   const selectedPlanData = plans.find((p) => p.id === selectedPlan);
   const currentPrice = selectedPlanData
@@ -46,7 +47,7 @@ export function PricingCalculator() {
     : 0;
 
   return (
-    <div className="space-y-4 sm:space-y-8">
+    <div className="space-y-4 sm:space-y-6">
       {/* AutoPay toggle */}
       <div className="flex justify-center">
         <div className="inline-flex flex-row items-center gap-4 rounded-2xl sm:border-2 sm:border-border sm:bg-card px-6 py-5 sm:shadow-sm">
@@ -138,21 +139,17 @@ export function PricingCalculator() {
       <div className="max-w-4xl mx-auto">
         <motion.div
           layout
-          className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl p-6 border border-primary/20"
+          className="p-6 sm:p-8"
         >
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Selected Plan</p>
-              <p className="text-2xl font-bold text-foreground">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="text-center sm:text-left w-full sm:w-auto">
+              <p className="text-sm font-medium text-primary uppercase tracking-wide mb-2">Selected Plan</p>
+              <p className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
                 {selectedPlanData?.name}
               </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                ${currentPrice}/month • Month-to-month
-                {useAutoPay && ` • AutoPay enabled`}
-              </p>
             </div>
-            <Button size="lg" className="px-8 hover:scale-105 transition-transform" asChild>
-              <Link href="/checklist">Get Started</Link>
+            <Button size="lg" className="w-full sm:w-auto px-8 py-6 text-lg hover:scale-105 transition-transform whitespace-nowrap" onClick={() => openGetStarted(selectedPlanData?.name)}>
+              Get Started
             </Button>
           </div>
         </motion.div>
