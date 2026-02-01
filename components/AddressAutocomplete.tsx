@@ -124,7 +124,8 @@ export function AddressAutocomplete({
         onChange={(e) => {
           const v = e.target.value;
           onChange(v);
-          onStandardizedChange?.(false);
+          // For plain text input, mark as standardized once user types (no validation requirement)
+          onStandardizedChange?.(true);
         }}
         onBlur={(e) => {
           const v = e.target.value.trim();

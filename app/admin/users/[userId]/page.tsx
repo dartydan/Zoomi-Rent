@@ -115,7 +115,8 @@ export default function AdminUserInstallPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const hasInstallAddress = [installStreet, installCity, installState, installZip].some((s) => s.trim() !== "");
-    if (editingAddress && hasInstallAddress && !installAddressStandardized) {
+    const useGoogleAutocomplete = process.env.NEXT_PUBLIC_USE_GOOGLE_ADDRESS_AUTOCOMPLETE === "true";
+    if (editingAddress && hasInstallAddress && !installAddressStandardized && useGoogleAutocomplete) {
       setError("Please select an address from the suggestions to standardize it.");
       return;
     }
