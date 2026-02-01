@@ -90,8 +90,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(newItem, { status: 201 });
   } catch (err) {
     console.error("Admin property create error:", err);
+    const code = err instanceof Error ? (err as NodeJS.ErrnoException).code : undefined;
+    const errMessage = err instanceof Error ? err.message : "";
+    const readOnly =
+      code === "EACCES" ||
+      code === "EROFS" ||
+      /read-only|permission denied|EACCES|EROFS/i.test(errMessage);
+    const message = readOnly
+      ? "Property storage is read-only in this environment. Use a database or persistent store for production."
+      : err instanceof Error
+        ? err.message
+        : "Failed to create property";
     return NextResponse.json(
-      { error: "Failed to create property" },
+      { error: message },
       { status: 500 }
     );
   }

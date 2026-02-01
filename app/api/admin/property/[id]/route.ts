@@ -136,8 +136,19 @@ export async function PATCH(
     return NextResponse.json({ ...updated, revenueGenerated: stored + currentRevenue });
   } catch (err) {
     console.error("Admin property update error:", err);
+    const code = err instanceof Error ? (err as NodeJS.ErrnoException).code : undefined;
+    const errMessage = err instanceof Error ? err.message : "";
+    const readOnly =
+      code === "EACCES" ||
+      code === "EROFS" ||
+      /read-only|permission denied|EACCES|EROFS/i.test(errMessage);
+    const message = readOnly
+      ? "Property storage is read-only in this environment. Use a database or persistent store for production."
+      : err instanceof Error
+        ? err.message
+        : "Failed to update property";
     return NextResponse.json(
-      { error: "Failed to update property" },
+      { error: message },
       { status: 500 }
     );
   }
