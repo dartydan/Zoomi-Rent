@@ -9,6 +9,7 @@ import { TestimonialsCarousel } from "@/components/TestimonialsCarousel";
 import { PricingCalculator } from "@/components/PricingCalculator";
 import { HowItWorksTimeline } from "@/components/HowItWorksTimeline";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { useGetStarted } from "@/components/GetStartedContext";
 
 function PhotoGallerySection() {
@@ -195,6 +196,9 @@ export default function Home() {
       <SplashHero />
       <div className="bg-background">
         <PricingSection />
+        <div className="mx-auto max-w-6xl px-4 py-1">
+          <Separator />
+        </div>
         <HowItWorksSection />
         <div id="benefits">
           <BenefitsWithIcons />
