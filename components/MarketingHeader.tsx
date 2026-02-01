@@ -96,7 +96,7 @@ export function MarketingHeader({ variant = "default" }: MarketingHeaderProps) {
                   <Link href="/dashboard">Dashboard</Link>
                 </Button>
               ) : (
-                <Button variant="default" size="default" className="hover:scale-105 transition-transform" onClick={openGetStarted}>
+                <Button variant="default" size="default" className="hover:scale-105 transition-transform" onClick={() => openGetStarted()}>
                   Get Started
                 </Button>
               )}

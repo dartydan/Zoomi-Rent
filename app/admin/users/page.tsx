@@ -215,6 +215,7 @@ export default function CustomersPage() {
             stripeCustomerId: null,
             installDate: null,
             installAddress: null,
+            selectedPlan: null,
             isPending: true,
           },
           ...prev,

@@ -169,7 +169,7 @@ function CTASection() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="text-base px-10 py-6 text-lg hover:scale-105 transition-transform" onClick={openGetStarted}>
+            <Button size="lg" className="text-base px-10 py-6 text-lg hover:scale-105 transition-transform" onClick={() => openGetStarted()}>
               Get Started Today
             </Button>
             <Button size="lg" variant="outline" className="text-base px-10 py-6 text-lg hover:scale-105 transition-transform bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white" asChild>
