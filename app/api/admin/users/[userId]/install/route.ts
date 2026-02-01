@@ -66,7 +66,7 @@ export async function GET(
     const install = (user.publicMetadata?.[INSTALL_METADATA_KEY] ?? {}) as InstallInfo;
     const customerProfile = user.publicMetadata?.customerProfile as Record<string, unknown> | undefined;
     const clerkEmail = user.emailAddresses?.[0]?.emailAddress ?? undefined;
-    const mergedProfile = {
+    const mergedProfile: Record<string, unknown> = {
       ...(customerProfile ?? {}),
       email: (customerProfile?.email as string) || clerkEmail || undefined,
     };
