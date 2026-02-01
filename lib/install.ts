@@ -1,14 +1,30 @@
 /**
+ * Single install/uninstall record (one lifecycle per location/unit).
+ */
+export type InstallRecord = {
+  id: string;
+  installDate: string; // ISO date string
+  uninstallDate?: string; // ISO date string
+  installAddress?: string;
+  notes?: string;
+  photoUrls?: string[];
+  contractUrls?: string[];
+};
+
+/**
  * Install info stored per user in Clerk publicMetadata.install
  */
 export type InstallInfo = {
-  installDate?: string; // ISO date string
+  /** @deprecated Use installs[].installDate. Kept for backward compat. */
+  installDate?: string;
   installAddress?: string;
   notes?: string;
-  photoUrls?: string[]; // Google Drive view URLs
-  contractUrls?: string[]; // Google Drive view URLs
-  driveFolderId?: string; // Customer's folder ID in Drive
-  propertyId?: string; // Admin-assigned property (asset) tied to this install
+  photoUrls?: string[];
+  contractUrls?: string[];
+  driveFolderId?: string;
+  propertyId?: string;
+  /** Multiple install/uninstall records. Takes precedence over installDate when present. */
+  installs?: InstallRecord[];
 };
 
 export const INSTALL_METADATA_KEY = "install" as const;

@@ -2,7 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { requireAdmin } from "@/lib/admin";
-import type { InstallInfo } from "@/lib/install";
+import type { InstallInfo, InstallRecord } from "@/lib/install";
 import { INSTALL_METADATA_KEY } from "@/lib/install";
 import {
   createCustomerFolder,
@@ -69,14 +69,28 @@ export async function GET(
     const mergedProfile: Record<string, unknown> = {
       ...(customerProfile ?? {}),
       email: (customerProfile?.email as string) || clerkEmail || undefined,
+      firstName: ((customerProfile?.firstName as string) || user.firstName) ?? undefined,
+      lastName: ((customerProfile?.lastName as string) || user.lastName) ?? undefined,
     };
     const profileAddress = (mergedProfile.address as string) ?? undefined;
     const installAddress = install.installAddress ?? profileAddress;
-    const stripeCustomerId = user.publicMetadata?.stripeCustomerId as string | undefined;
+    let stripeCustomerId = (user.publicMetadata?.stripeCustomerId as string | undefined)?.trim() || null;
+    const stripe = getStripe();
+    if (stripe && !stripeCustomerId && clerkEmail) {
+      const list = await stripe.customers.list({ email: clerkEmail, limit: 1 });
+      if (list.data.length > 0 && !list.data[0].deleted) stripeCustomerId = list.data[0].id;
+    }
     const lifetimeValue =
       stripeCustomerId != null ? await computeLifetimeValue(stripeCustomerId) : 0;
+    const installs: InstallRecord[] =
+      Array.isArray(install.installs) && install.installs.length > 0
+        ? install.installs
+        : install.installDate
+          ? [{ id: "legacy", installDate: install.installDate, uninstallDate: undefined, installAddress: install.installAddress, notes: install.notes, photoUrls: install.photoUrls, contractUrls: install.contractUrls }]
+          : [];
     return NextResponse.json({
       ...install,
+      installs,
       installAddress: installAddress ?? undefined,
       customerProfile: mergedProfile,
       lifetimeValue,
@@ -104,12 +118,21 @@ export async function PATCH(
     const { userId } = await params;
     const formData = await req.formData();
 
-    const installDate = (formData.get("installDate") as string) ?? undefined;
+    const installIdRaw = (formData.get("installId") as string) ?? "";
+    const installId = installIdRaw.trim() || "new";
+    const installDate = (formData.get("installDate") as string) ?? "";
+    const uninstallDate = (formData.get("uninstallDate") as string) ?? undefined;
     const installAddress = (formData.get("installAddress") as string) ?? undefined;
     const notes = (formData.get("notes") as string) ?? undefined;
 
     const user = await clerkClient.users.getUser(userId);
     const existing = (user.publicMetadata?.[INSTALL_METADATA_KEY] ?? {}) as InstallInfo;
+    const existingInstalls: InstallRecord[] =
+      Array.isArray(existing.installs) && existing.installs.length > 0
+        ? existing.installs
+        : existing.installDate
+          ? [{ id: "legacy", installDate: existing.installDate, uninstallDate: undefined, installAddress: existing.installAddress, notes: existing.notes, photoUrls: existing.photoUrls, contractUrls: existing.contractUrls }]
+          : [];
 
     const existingPhotoUrls: string[] = [];
     for (let i = 0; ; i++) {
@@ -129,11 +152,19 @@ export async function PATCH(
     const newPhotos = photoFiles.filter((f): f is File => f instanceof File && f.size > 0);
     const newContracts = contractFiles.filter((f): f is File => f instanceof File && f.size > 0);
 
-    let photoUrls = existingPhotoUrls.length ? existingPhotoUrls : (existing.photoUrls ?? []);
-    let contractUrls = existingContractUrls.length
-      ? existingContractUrls
-      : (existing.contractUrls ?? []);
+    let photoUrls = existingPhotoUrls.length ? existingPhotoUrls : [];
+    let contractUrls = existingContractUrls.length ? existingContractUrls : [];
     let driveFolderId = existing.driveFolderId;
+
+    if (installId !== "new") {
+      const editRec = existingInstalls.find((r) => r.id === installId);
+      if (editRec) {
+        if (!existingPhotoUrls.length && !existingContractUrls.length) {
+          photoUrls = editRec.photoUrls ?? [];
+          contractUrls = editRec.contractUrls ?? [];
+        }
+      }
+    }
 
     if (newPhotos.length > 0 || newContracts.length > 0) {
       if (!isGoogleDriveConfigured()) {
@@ -193,12 +224,23 @@ export async function PATCH(
       }
     }
 
-    const install: InstallInfo = {
-      installDate: installDate || existing.installDate,
-      installAddress: installAddress || existing.installAddress,
-      notes: notes ?? existing.notes,
+    const record: InstallRecord = {
+      id: installId === "new" ? crypto.randomUUID() : installId,
+      installDate: installDate || (installId !== "new" ? existingInstalls.find((r) => r.id === installId)?.installDate ?? "" : ""),
+      uninstallDate: uninstallDate && uninstallDate.trim() ? uninstallDate.trim() : undefined,
+      installAddress: installAddress?.trim() || undefined,
+      notes: notes?.trim() || undefined,
       photoUrls: photoUrls.length ? photoUrls : undefined,
       contractUrls: contractUrls.length ? contractUrls : undefined,
+    };
+
+    const installs: InstallRecord[] =
+      installId === "new"
+        ? [...existingInstalls, record]
+        : existingInstalls.map((r) => (r.id === installId ? record : r));
+
+    const install: InstallInfo = {
+      installs,
       driveFolderId: driveFolderId ?? existing.driveFolderId,
       propertyId: existing.propertyId,
     };
@@ -210,7 +252,7 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(install);
+    return NextResponse.json({ ...install, installs });
   } catch (err) {
     console.error("Admin update install error:", err);
     return NextResponse.json(

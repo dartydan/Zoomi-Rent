@@ -27,7 +27,23 @@ export async function GET(
     const { userId } = await params;
     const user = await clerkClient.users.getUser(userId);
     const install = (user.publicMetadata?.[INSTALL_METADATA_KEY] ?? {}) as InstallInfo;
-    const installDate = install.installDate ?? null;
+    const installDate =
+      (Array.isArray(install.installs) && install.installs.length > 0
+        ? install.installs[0].installDate
+        : install.installDate) ?? null;
+
+    const logins: { date: string }[] = [];
+    try {
+      const sessionList = await clerkClient.sessions.getSessionList({ userId, limit: 100 });
+      sessionList.data.forEach((session) => {
+        const createdAt = session.createdAt;
+        if (createdAt != null) logins.push({ date: new Date(createdAt).toISOString() });
+      });
+      logins.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } catch (e) {
+      console.warn("Timeline: could not fetch session list:", e);
+    }
+
     let stripeCustomerId = (user.publicMetadata?.stripeCustomerId as string | undefined)?.trim() || null;
 
     const stripe = getStripe();
@@ -42,6 +58,7 @@ export async function GET(
     }
 
     const payments: { date: string; amount: number; currency: string }[] = [];
+    const paymentMethodChanges: { date: string; type: "payment_method_added" | "payment_method_removed" | "payment_settings_updated" }[] = [];
     let nextPaymentDate: string | null = null;
     let nextPaymentAmount: number | null = null;
     let nextPaymentCurrency = "usd";
@@ -118,6 +135,48 @@ export async function GET(
         nextPaymentAmount = soonest.amount;
         nextPaymentCurrency = soonest.currency;
       }
+
+      try {
+        const [attachedRes, detachedRes, customerUpdatedRes] = await Promise.all([
+          stripe.events.list({ type: "payment_method.attached", limit: 50 }),
+          stripe.events.list({ type: "payment_method.detached", limit: 50 }),
+          stripe.events.list({ type: "customer.updated", limit: 50 }),
+        ]);
+        type StripeEventWithObject = { created?: number; data?: { object?: { customer?: string; id?: string } } };
+        const addIfForCustomer = (
+          events: StripeEventWithObject[],
+          type: "payment_method_added" | "payment_method_removed" | "payment_settings_updated",
+          matchCustomer: (obj: { customer?: string; id?: string }) => boolean
+        ) => {
+          events.forEach((ev) => {
+            const obj = ev.data?.object;
+            if (obj && ev.created != null && matchCustomer(obj)) {
+              paymentMethodChanges.push({
+                date: new Date(ev.created * 1000).toISOString(),
+                type,
+              });
+            }
+          });
+        };
+        addIfForCustomer(
+          attachedRes.data as StripeEventWithObject[],
+          "payment_method_added",
+          (obj) => obj.customer === stripeCustomerId
+        );
+        addIfForCustomer(
+          detachedRes.data as StripeEventWithObject[],
+          "payment_method_removed",
+          (obj) => obj.customer === stripeCustomerId
+        );
+        addIfForCustomer(
+          customerUpdatedRes.data as StripeEventWithObject[],
+          "payment_settings_updated",
+          (obj) => obj.id === stripeCustomerId
+        );
+        paymentMethodChanges.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      } catch (e) {
+        console.warn("Timeline: could not fetch payment method events:", e);
+      }
     }
 
     return NextResponse.json({
@@ -126,6 +185,8 @@ export async function GET(
       nextPaymentDate,
       nextPaymentAmount,
       nextPaymentCurrency,
+      logins,
+      paymentMethodChanges,
     });
   } catch (err) {
     console.error("Admin timeline error:", err);

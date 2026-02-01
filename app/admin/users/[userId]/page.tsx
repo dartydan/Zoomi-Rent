@@ -6,15 +6,18 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink, Wrench, CreditCard, CalendarClock, Plus } from "lucide-react";
-import type { InstallInfo } from "@/lib/install";
+import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink, Wrench, CreditCard, CalendarClock, Plus, LogIn } from "lucide-react";
+import type { InstallInfo, InstallRecord } from "@/lib/install";
 import type { Property } from "@/lib/property";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -72,7 +75,11 @@ export default function AdminUserInstallPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [installs, setInstalls] = useState<InstallRecord[]>([]);
+  const [installDialogOpen, setInstallDialogOpen] = useState(false);
+  const [installDialogEditId, setInstallDialogEditId] = useState<string | null>(null);
   const [installDate, setInstallDate] = useState("");
+  const [uninstallDate, setUninstallDate] = useState("");
   const [installStreet, setInstallStreet] = useState("");
   const [installCity, setInstallCity] = useState("");
   const [installState, setInstallState] = useState("");
@@ -92,6 +99,8 @@ export default function AdminUserInstallPage() {
     nextPaymentDate: string | null;
     nextPaymentAmount: number | null;
     nextPaymentCurrency: string;
+    logins: { date: string }[];
+    paymentMethodChanges: { date: string; type: "payment_method_added" | "payment_method_removed" | "payment_settings_updated" }[];
   };
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [assignedProperties, setAssignedProperties] = useState<Property[]>([]);
@@ -109,6 +118,22 @@ export default function AdminUserInstallPage() {
   const emailInputRef = useRef<HTMLInputElement>(null);
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const addressInputRef = useRef<HTMLInputElement>(null);
+  const prevInstallDialogOpen = useRef(false);
+
+  useEffect(() => {
+    if (prevInstallDialogOpen.current && !installDialogOpen && installs.length > 0) {
+      const first = installs[0];
+      setNotes(first.notes ?? "");
+      setExistingPhotoUrls(first.photoUrls ?? []);
+      setExistingContractUrls(first.contractUrls ?? []);
+      const parsed = parseInstallAddress(first.installAddress ?? "");
+      setInstallStreet(parsed.street);
+      setInstallCity(parsed.city);
+      setInstallState(parsed.state);
+      setInstallZip(parsed.zip);
+    }
+    prevInstallDialogOpen.current = installDialogOpen;
+  }, [installDialogOpen, installs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,20 +141,24 @@ export default function AdminUserInstallPage() {
       try {
         const res = await fetch(`/api/admin/users/${userId}/install`);
         if (!res.ok) throw new Error("Failed to load");
-        const json = (await res.json()) as InstallInfo & { customerProfile?: CustomerProfile; lifetimeValue?: number };
+        const json = (await res.json()) as InstallInfo & { customerProfile?: CustomerProfile; lifetimeValue?: number; installs?: InstallRecord[] };
         if (cancelled) return;
         setData(json);
         setCustomerProfile(json.customerProfile ?? null);
         setLifetimeValue(typeof json.lifetimeValue === "number" ? json.lifetimeValue : 0);
-        setInstallDate(json.installDate ?? "");
-        const parsed = parseInstallAddress(json.installAddress ?? "");
-        setInstallStreet(parsed.street);
-        setInstallCity(parsed.city);
-        setInstallState(parsed.state);
-        setInstallZip(parsed.zip);
-        setNotes(json.notes ?? "");
-        setExistingPhotoUrls(json.photoUrls ?? []);
-        setExistingContractUrls(json.contractUrls ?? []);
+        const list = Array.isArray(json.installs) ? json.installs : [];
+        setInstalls(list);
+        const first = list[0];
+        if (first) {
+          setNotes(first.notes ?? "");
+          setExistingPhotoUrls(first.photoUrls ?? []);
+          setExistingContractUrls(first.contractUrls ?? []);
+          const parsed = parseInstallAddress(first.installAddress ?? "");
+          setInstallStreet(parsed.street);
+          setInstallCity(parsed.city);
+          setInstallState(parsed.state);
+          setInstallZip(parsed.zip);
+        }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
       } finally {
@@ -151,6 +180,8 @@ export default function AdminUserInstallPage() {
       nextPaymentDate: null,
       nextPaymentAmount: null,
       nextPaymentCurrency: "usd",
+      logins: [],
+      paymentMethodChanges: [],
     };
     fetch(`/api/admin/users/${userId}/timeline`)
       .then((res) => {
@@ -165,6 +196,8 @@ export default function AdminUserInstallPage() {
           nextPaymentDate: json.nextPaymentDate ?? null,
           nextPaymentAmount: json.nextPaymentAmount ?? null,
           nextPaymentCurrency: json.nextPaymentCurrency ?? "usd",
+          logins: Array.isArray(json.logins) ? json.logins : [],
+          paymentMethodChanges: Array.isArray(json.paymentMethodChanges) ? json.paymentMethodChanges : [],
         });
       })
       .catch(() => {
@@ -255,7 +288,124 @@ export default function AdminUserInstallPage() {
     return () => cancelAnimationFrame(id);
   }, [editingContactField, contactClickCaretIndex]);
 
-  async function handleSubmit(e: React.FormEvent) {
+  function openInstallDialog(editId: string | null) {
+    setInstallDialogEditId(editId);
+    setInstallDialogOpen(true);
+    if (editId !== null) {
+      const rec = installs.find((r) => r.id === editId);
+      if (rec) {
+        setInstallDate(rec.installDate ?? "");
+        setUninstallDate(rec.uninstallDate ?? "");
+        const parsed = parseInstallAddress(rec.installAddress ?? "");
+        setInstallStreet(parsed.street);
+        setInstallCity(parsed.city);
+        setInstallState(parsed.state);
+        setInstallZip(parsed.zip);
+        setNotes(rec.notes ?? "");
+        setExistingPhotoUrls(rec.photoUrls ?? []);
+        setExistingContractUrls(rec.contractUrls ?? []);
+        setPhotos([]);
+        setContracts([]);
+        setInstallAddressStandardized(false);
+        setEditingAddress(false);
+      }
+    } else {
+      setInstallDate("");
+      setUninstallDate("");
+      setInstallStreet("");
+      setInstallCity("");
+      setInstallState("");
+      setInstallZip("");
+      setNotes("");
+      setExistingPhotoUrls([]);
+      setExistingContractUrls([]);
+      setPhotos([]);
+      setContracts([]);
+      setInstallAddressStandardized(false);
+      setEditingAddress(false);
+    }
+    setError(null);
+  }
+
+  function closeInstallDialog() {
+    setInstallDialogOpen(false);
+    setInstallDialogEditId(null);
+  }
+
+  async function handleCardSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const hasInstallAddress = [installStreet, installCity, installState, installZip].some((s) => s.trim() !== "");
+    const useGoogleAutocomplete = process.env.NEXT_PUBLIC_USE_GOOGLE_ADDRESS_AUTOCOMPLETE === "true";
+    if (editingAddress && hasInstallAddress && !installAddressStandardized && useGoogleAutocomplete) {
+      setError("Please select an address from the suggestions to standardize it.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const first = installs[0];
+      const formData = new FormData();
+      formData.append("installId", first?.id ?? "new");
+      formData.append("installDate", first?.installDate ?? "");
+      formData.append("uninstallDate", first?.uninstallDate ?? "");
+      formData.append(
+        "installAddress",
+        combineInstallAddress({
+          street: installStreet,
+          city: installCity,
+          state: installState,
+          zip: installZip,
+        })
+      );
+      formData.append("notes", notes || "");
+      existingPhotoUrls.forEach((url, index) => {
+        formData.append(`existingPhotoUrls[${index}]`, url);
+      });
+      existingContractUrls.forEach((url, index) => {
+        formData.append(`existingContractUrls[${index}]`, url);
+      });
+      photos.forEach((file) => formData.append("photos", file));
+      contracts.forEach((file) => formData.append("contracts", file));
+
+      const res = await fetch(`/api/admin/users/${userId}/install`, {
+        method: "PATCH",
+        body: formData,
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error((j as { error?: string }).error ?? "Failed to save");
+      }
+      const updated = (await res.json()) as { installs?: InstallRecord[] };
+      setInstalls(Array.isArray(updated.installs) ? updated.installs : []);
+      const refetch = await fetch(`/api/admin/users/${userId}/install`);
+      if (refetch.ok) {
+        const json = (await refetch.json()) as InstallInfo & { installs?: InstallRecord[] };
+        setData(json);
+        const list = Array.isArray(json.installs) ? json.installs : [];
+        setInstalls(list);
+        const first = list[0];
+        if (first) {
+          setNotes(first.notes ?? "");
+          setExistingPhotoUrls(first.photoUrls ?? []);
+          setExistingContractUrls(first.contractUrls ?? []);
+          const parsed = parseInstallAddress(first.installAddress ?? "");
+          setInstallStreet(parsed.street);
+          setInstallCity(parsed.city);
+          setInstallState(parsed.state);
+          setInstallZip(parsed.zip);
+        }
+      }
+      setPhotos([]);
+      setContracts([]);
+      setEditingAddress(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleInstallSubmit(e: React.FormEvent) {
     e.preventDefault();
     const hasInstallAddress = [installStreet, installCity, installState, installZip].some((s) => s.trim() !== "");
     const useGoogleAutocomplete = process.env.NEXT_PUBLIC_USE_GOOGLE_ADDRESS_AUTOCOMPLETE === "true";
@@ -267,7 +417,9 @@ export default function AdminUserInstallPage() {
     setError(null);
     try {
       const formData = new FormData();
+      formData.append("installId", installDialogEditId ?? "new");
       formData.append("installDate", installDate || "");
+      formData.append("uninstallDate", uninstallDate || "");
       formData.append(
         "installAddress",
         combineInstallAddress({
@@ -278,51 +430,38 @@ export default function AdminUserInstallPage() {
         })
       );
       formData.append("notes", notes || "");
-      
-      // Add existing photo URLs
       existingPhotoUrls.forEach((url, index) => {
         formData.append(`existingPhotoUrls[${index}]`, url);
       });
-      
-      // Add existing contract URLs
       existingContractUrls.forEach((url, index) => {
         formData.append(`existingContractUrls[${index}]`, url);
       });
-      
-      // Add new photo files
-      photos.forEach((file) => {
-        formData.append("photos", file);
-      });
-      
-      // Add new contract files
-      contracts.forEach((file) => {
-        formData.append("contracts", file);
-      });
+      photos.forEach((file) => formData.append("photos", file));
+      contracts.forEach((file) => formData.append("contracts", file));
 
       const res = await fetch(`/api/admin/users/${userId}/install`, {
         method: "PATCH",
         body: formData,
       });
-      
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error((j as { error?: string }).error ?? "Failed to save");
       }
-      
-      const updated = (await res.json()) as InstallInfo;
-      setData(updated);
-      setInstallDate(updated.installDate ?? "");
-      const parsed = parseInstallAddress(updated.installAddress ?? "");
-      setInstallStreet(parsed.street);
-      setInstallCity(parsed.city);
-      setInstallState(parsed.state);
-      setInstallZip(parsed.zip);
-      setNotes(updated.notes ?? "");
-      setExistingPhotoUrls(updated.photoUrls ?? []);
-      setExistingContractUrls(updated.contractUrls ?? []);
-      setPhotos([]);
-      setContracts([]);
-      setEditingAddress(false);
+      const updated = (await res.json()) as { installs?: InstallRecord[] };
+      setInstalls(Array.isArray(updated.installs) ? updated.installs : []);
+      const refetch = await fetch(`/api/admin/users/${userId}/install`);
+      if (refetch.ok) {
+        const json = (await refetch.json()) as InstallInfo & { installs?: InstallRecord[] };
+        setData(json);
+        setInstalls(Array.isArray(json.installs) ? json.installs : []);
+      }
+      fetch(`/api/admin/users/${userId}/timeline`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((timelineJson) => {
+          if (timelineJson) setTimeline(timelineJson);
+        })
+        .catch(() => {});
+      closeInstallDialog();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save");
     } finally {
@@ -364,12 +503,6 @@ export default function AdminUserInstallPage() {
       .join(" ");
   }
   const displayName = formatFirstNameLastName(customerProfile?.firstName, customerProfile?.lastName);
-  const displayAddress = combineInstallAddress({
-    street: installStreet,
-    city: installCity,
-    state: installState,
-    zip: installZip,
-  });
 
   function getCaretIndexFromClick(e: React.MouseEvent, maxIndex: number): number {
     let index = maxIndex;
@@ -390,6 +523,15 @@ export default function AdminUserInstallPage() {
       day: "numeric",
     });
   }
+  function formatTimelineDateTime(iso: string) {
+    return new Date(iso).toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
   function formatTimelineAmount(amount: number, currency: string) {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -399,9 +541,8 @@ export default function AdminUserInstallPage() {
   }
 
   return (
-    <div className="flex gap-6 lg:flex-row flex-col">
-      <div className="flex-1 min-w-0 space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 lg:col-span-2">
         <Button
           variant="ghost"
           size="sm"
@@ -485,6 +626,7 @@ export default function AdminUserInstallPage() {
         </div>
       </div>
 
+      <div className="min-w-0 space-y-6">
       {loading ? (
         <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-border bg-muted/30 p-8">
           <p className="text-muted-foreground">Loading…</p>
@@ -508,19 +650,11 @@ export default function AdminUserInstallPage() {
                     if (!res.ok) throw new Error("Failed to load");
                     return res.json();
                   })
-                  .then((json: InstallInfo & { customerProfile?: CustomerProfile; lifetimeValue?: number }) => {
+                  .then((json: InstallInfo & { customerProfile?: CustomerProfile; lifetimeValue?: number; installs?: InstallRecord[] }) => {
                     setData(json);
                     setCustomerProfile(json.customerProfile ?? null);
                     setLifetimeValue(typeof json.lifetimeValue === "number" ? json.lifetimeValue : 0);
-                    setInstallDate(json.installDate ?? "");
-                    const parsed = parseInstallAddress(json.installAddress ?? "");
-                    setInstallStreet(parsed.street);
-                    setInstallCity(parsed.city);
-                    setInstallState(parsed.state);
-                    setInstallZip(parsed.zip);
-                    setNotes(json.notes ?? "");
-                    setExistingPhotoUrls(json.photoUrls ?? []);
-                    setExistingContractUrls(json.contractUrls ?? []);
+                    setInstalls(Array.isArray(json.installs) ? json.installs : []);
                   })
                   .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
                   .finally(() => setLoading(false));
@@ -767,13 +901,60 @@ export default function AdminUserInstallPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleCardSubmit}>
         <Card>
           <CardHeader className="space-y-1">
             <CardTitle className="text-base">Details</CardTitle>
-            <CardDescription>Notes, photos, and signed contracts. Files are stored in Google Drive.</CardDescription>
+            <CardDescription>Install and uninstall dates, notes, photos, and signed contracts. Files are stored in Google Drive.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-foreground">Installs</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {installs.length > 0 && (
+                  <>
+                    {installs.map((rec) => (
+                      <button
+                        key={rec.id}
+                        type="button"
+                        onClick={() => openInstallDialog(rec.id)}
+                        className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                        {new Date(rec.installDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        <span className="text-muted-foreground">–</span>
+                        {rec.uninstallDate
+                          ? new Date(rec.uninstallDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                          : "—"}
+                      </button>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 w-8 p-0 shrink-0"
+                      onClick={() => openInstallDialog(null)}
+                      aria-label="Add install"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+                {installs.length === 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openInstallDialog(null)}
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add install
+                  </Button>
+                )}
+              </div>
+            </div>
+
             {error && (
               <p className="text-sm text-destructive" role="alert">
                 {error}
@@ -792,15 +973,11 @@ export default function AdminUserInstallPage() {
                 className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
-            {/* Two Column File Upload Section */}
             <div className="grid gap-6 md:grid-cols-2">
-              {/* Installation Photos Column */}
               <div className="space-y-2">
                 <label htmlFor="photos" className="text-sm font-medium text-foreground">
                   Installation Photos
                 </label>
-                
-                {/* Existing Photos */}
                 {existingPhotoUrls.length > 0 && (
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     {existingPhotoUrls.map((url, index) => (
@@ -832,8 +1009,6 @@ export default function AdminUserInstallPage() {
                     ))}
                   </div>
                 )}
-                
-                {/* New Photos Preview */}
                 {photos.length > 0 && (
                   <div className="grid grid-cols-2 gap-3 mb-3">
                     {photos.map((file, index) => (
@@ -857,8 +1032,6 @@ export default function AdminUserInstallPage() {
                     ))}
                   </div>
                 )}
-                
-                {/* Photo Upload */}
                 <div className="flex items-center justify-center w-full">
                   <label
                     htmlFor="photos"
@@ -882,14 +1055,10 @@ export default function AdminUserInstallPage() {
                   </label>
                 </div>
               </div>
-
-              {/* Signed Contract Column */}
               <div className="space-y-2">
                 <label htmlFor="contracts" className="text-sm font-medium text-foreground">
                   Signed Contract
                 </label>
-                
-                {/* Existing Contracts */}
                 {existingContractUrls.length > 0 && (
                   <div className="space-y-2 mb-3">
                     {existingContractUrls.map((url, index) => (
@@ -920,8 +1089,6 @@ export default function AdminUserInstallPage() {
                     ))}
                   </div>
                 )}
-                
-                {/* New Contracts Preview */}
                 {contracts.length > 0 && (
                   <div className="space-y-2 mb-3">
                     {contracts.map((file, index) => (
@@ -942,8 +1109,6 @@ export default function AdminUserInstallPage() {
                     ))}
                   </div>
                 )}
-                
-                {/* Contract Upload */}
                 <div className="flex items-center justify-center w-full">
                   <label
                     htmlFor="contracts"
@@ -968,9 +1133,156 @@ export default function AdminUserInstallPage() {
                 </div>
               </div>
             </div>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
           </CardContent>
         </Card>
       </form>
+
+      <Dialog open={installDialogOpen} onOpenChange={(open) => !open && closeInstallDialog()}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{installDialogEditId === null ? "Add install" : "Edit install"}</DialogTitle>
+            <DialogDescription>Install and uninstall dates, address, notes, photos, and contracts. Files are stored in Google Drive.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleInstallSubmit} className="space-y-4">
+            {error && (
+              <p className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="install-dialog-install-date">Install date</Label>
+                <Input
+                  id="install-dialog-install-date"
+                  type="date"
+                  value={installDate ? installDate.slice(0, 10) : ""}
+                  onChange={(e) => setInstallDate(e.target.value ? `${e.target.value}T00:00:00.000Z` : "")}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="install-dialog-uninstall-date">Uninstall date</Label>
+                <Input
+                  id="install-dialog-uninstall-date"
+                  type="date"
+                  value={uninstallDate ? uninstallDate.slice(0, 10) : ""}
+                  onChange={(e) => setUninstallDate(e.target.value ? `${e.target.value}T00:00:00.000Z` : "")}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="install-dialog-address">Address</Label>
+              <AddressAutocomplete
+                id="install-dialog-address"
+                value={combineInstallAddress({ street: installStreet, city: installCity, state: installState, zip: installZip })}
+                onChange={(v) => {
+                  const parsed = parseInstallAddress(v);
+                  setInstallStreet(parsed.street);
+                  setInstallCity(parsed.city);
+                  setInstallState(parsed.state);
+                  setInstallZip(parsed.zip);
+                }}
+                onPlaceSelect={(parts) => {
+                  setInstallStreet(parts.street);
+                  setInstallCity(parts.city);
+                  setInstallState(parts.state);
+                  setInstallZip(parts.zip);
+                  setInstallAddressStandardized(true);
+                }}
+                onStandardizedChange={setInstallAddressStandardized}
+                placeholder="Street address"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="install-dialog-notes">Notes</Label>
+              <textarea
+                id="install-dialog-notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Install notes, issues, etc."
+                rows={3}
+                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Installation photos</Label>
+                {existingPhotoUrls.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    {existingPhotoUrls.map((url, index) => (
+                      <div key={`dl-photo-${index}`} className="relative group">
+                        <img src={url} alt="" className="w-full h-20 object-cover rounded border border-border" />
+                        <button type="button" onClick={() => removeExistingPhoto(index)} className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {photos.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    {photos.map((file, index) => (
+                      <div key={`dl-new-${index}`} className="relative group">
+                        <img src={URL.createObjectURL(file)} alt="" className="w-full h-20 object-cover rounded border border-primary" />
+                        <button type="button" onClick={() => removePhoto(index)} className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-border border-dashed rounded-lg cursor-pointer bg-muted/50 hover:bg-muted transition-colors">
+                  <Upload className="w-5 h-5 mb-1 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Click to upload</span>
+                  <input type="file" multiple accept="image/*" onChange={handleFileChange} className="hidden" />
+                </label>
+              </div>
+              <div className="space-y-2">
+                <Label>Signed contract</Label>
+                {existingContractUrls.length > 0 && (
+                  <div className="space-y-1 mb-2">
+                    {existingContractUrls.map((url, index) => (
+                      <div key={`dl-contract-${index}`} className="flex items-center justify-between p-2 border border-border rounded text-sm">
+                        <span className="truncate">contract-{index + 1}.pdf</span>
+                        <button type="button" onClick={() => removeExistingContract(index)} className="shrink-0 text-destructive">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {contracts.length > 0 && (
+                  <div className="space-y-1 mb-2">
+                    {contracts.map((file, index) => (
+                      <div key={`dl-new-c-${index}`} className="flex items-center justify-between p-2 border border-primary rounded text-sm">
+                        <span className="truncate">{file.name}</span>
+                        <button type="button" onClick={() => removeContract(index)} className="shrink-0 text-destructive">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-border border-dashed rounded-lg cursor-pointer bg-muted/50 hover:bg-muted transition-colors">
+                  <FileText className="w-5 h-5 mb-1 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Click to upload PDF</span>
+                  <input type="file" multiple accept="application/pdf,.pdf" onChange={handleContractChange} className="hidden" />
+                </label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeInstallDialog}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       </>
       )}
       </div>
@@ -986,46 +1298,105 @@ export default function AdminUserInstallPage() {
               <div className="relative space-y-4">
                 {/* vertical line */}
                 <span className="absolute left-[11px] top-2 bottom-2 w-px bg-border" aria-hidden />
-                {timeline.installDate && (
-                  <div className="relative flex gap-3">
-                    <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
-                      <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
-                    </span>
-                    <div className="min-w-0 pt-0.5">
-                      <p className="text-sm font-medium text-foreground">Date installed</p>
-                      <p className="text-xs text-muted-foreground">{formatTimelineDate(timeline.installDate)}</p>
-                    </div>
-                  </div>
-                )}
-                {timeline.payments.map((p) => (
-                  <div key={p.date + p.amount} className="relative flex gap-3">
-                    <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
-                      <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
-                    </span>
-                    <div className="min-w-0 pt-0.5">
-                      <p className="text-sm font-medium text-foreground">Payment received</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatTimelineDate(p.date)} · {formatTimelineAmount(p.amount, p.currency)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                {timeline.nextPaymentDate && timeline.nextPaymentAmount != null && (
-                  <div className="relative flex gap-3">
-                    <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
-                      <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
-                    </span>
-                    <div className="min-w-0 pt-0.5">
-                      <p className="text-sm font-medium text-foreground">Next payment scheduled</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatTimelineDate(timeline.nextPaymentDate)} · {formatTimelineAmount(timeline.nextPaymentAmount, timeline.nextPaymentCurrency)}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {!timeline.installDate && timeline.payments.length === 0 && !timeline.nextPaymentDate && (
-                  <p className="text-sm text-muted-foreground pl-9">No timeline events yet.</p>
-                )}
+                {(() => {
+                  type Event = { date: string; kind: "install" | "payment" | "next" | "login" | "payment_method"; payload: unknown };
+                  const events: Event[] = [];
+                  if (timeline.installDate) events.push({ date: timeline.installDate, kind: "install", payload: null });
+                  timeline.payments.forEach((p) => events.push({ date: p.date, kind: "payment", payload: p }));
+                  if (timeline.nextPaymentDate && timeline.nextPaymentAmount != null)
+                    events.push({
+                      date: timeline.nextPaymentDate,
+                      kind: "next",
+                      payload: { amount: timeline.nextPaymentAmount, currency: timeline.nextPaymentCurrency },
+                    });
+                  timeline.logins.forEach((l) => events.push({ date: l.date, kind: "login", payload: null }));
+                  timeline.paymentMethodChanges.forEach((pm) =>
+                    events.push({ date: pm.date, kind: "payment_method", payload: pm })
+                  );
+                  events.sort((a, b) => {
+                    const tA = new Date(a.date).getTime();
+                    const tB = new Date(b.date).getTime();
+                    if (tA !== tB) return tB - tA;
+                    return 0;
+                  });
+                  if (events.length === 0) return <p className="text-sm text-muted-foreground pl-9">No timeline events yet.</p>;
+                  return events.map((ev) => {
+                    if (ev.kind === "login")
+                      return (
+                        <div key={`login-${ev.date}`} className="relative flex gap-3">
+                          <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
+                            <LogIn className="h-3.5 w-3.5 text-muted-foreground" />
+                          </span>
+                          <div className="min-w-0 pt-0.5">
+                            <p className="text-sm font-medium text-foreground">Logged in</p>
+                            <p className="text-xs text-muted-foreground">{formatTimelineDateTime(ev.date)}</p>
+                          </div>
+                        </div>
+                      );
+                    if (ev.kind === "install")
+                      return (
+                        <div key="install" className="relative flex gap-3">
+                          <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
+                            <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+                          </span>
+                          <div className="min-w-0 pt-0.5">
+                            <p className="text-sm font-medium text-foreground">Date installed</p>
+                            <p className="text-xs text-muted-foreground">{formatTimelineDate(ev.date)}</p>
+                          </div>
+                        </div>
+                      );
+                    if (ev.kind === "payment") {
+                      const p = ev.payload as { date: string; amount: number; currency: string };
+                      return (
+                        <div key={`payment-${p.date}-${p.amount}`} className="relative flex gap-3">
+                          <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
+                            <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                          </span>
+                          <div className="min-w-0 pt-0.5">
+                            <p className="text-sm font-medium text-foreground">Payment received</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatTimelineDate(p.date)} · {formatTimelineAmount(p.amount, p.currency)}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (ev.kind === "payment_method") {
+                      const pm = ev.payload as { date: string; type: "payment_method_added" | "payment_method_removed" | "payment_settings_updated" };
+                      const label =
+                        pm.type === "payment_method_added"
+                          ? "Payment method added"
+                          : pm.type === "payment_method_removed"
+                            ? "Payment method removed"
+                            : "Default payment method updated";
+                      return (
+                        <div key={`payment-method-${ev.date}-${pm.type}`} className="relative flex gap-3">
+                          <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
+                            <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+                          </span>
+                          <div className="min-w-0 pt-0.5">
+                            <p className="text-sm font-medium text-foreground">{label}</p>
+                            <p className="text-xs text-muted-foreground">{formatTimelineDateTime(ev.date)}</p>
+                          </div>
+                        </div>
+                      );
+                    }
+                    const n = ev.payload as { amount: number; currency: string };
+                    return (
+                      <div key="next" className="relative flex gap-3">
+                        <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
+                          <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                        </span>
+                        <div className="min-w-0 pt-0.5">
+                          <p className="text-sm font-medium text-foreground">Next payment scheduled</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatTimelineDate(ev.date)} · {formatTimelineAmount(n.amount, n.currency)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Loading timeline…</p>

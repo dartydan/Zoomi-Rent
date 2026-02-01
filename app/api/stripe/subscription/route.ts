@@ -63,7 +63,13 @@ export async function GET(request: Request) {
     }
 
     const stripe = getStripe();
-    const expand = ["data.items.data.price", "data.discounts", "data.discounts.coupon"];
+    const expand = [
+      "data.items.data.price",
+      "data.discount",
+      "data.discount.coupon",
+      "data.discounts",
+      "data.discounts.coupon",
+    ];
     const now = Math.floor(Date.now() / 1000);
 
     type NextPayment = {

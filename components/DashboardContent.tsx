@@ -248,30 +248,31 @@ export function DashboardContent() {
 
   const impersonating = isAdmin && impersonateUserId;
   const impersonateUser = impersonating ? adminUsers.find((u) => u.id === impersonateUserId) : null;
+  const displayFirstName = impersonating && impersonateUser
+    ? (impersonateUser.firstName ?? "").trim() || null
+    : user?.firstName ?? null;
 
   return (
     <div className="flex min-h-full flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-0.5">
           <h1 className="text-2xl font-bold text-foreground">
-            Welcome{!impersonating && user?.firstName ? `, ${user.firstName}` : impersonating && impersonateUser ? ` — viewing ${[impersonateUser.firstName, impersonateUser.lastName].filter(Boolean).join(" ").trim() || impersonateUser.email}` : !user && process.env.NODE_ENV === "development" ? ", Demo User" : ""}
+            Welcome{displayFirstName ? `, ${displayFirstName}` : !user && process.env.NODE_ENV === "development" ? ", Demo User" : ""}
           </h1>
           <p className="text-sm text-muted-foreground">
             Manage your washer and dryer rental billing.
           </p>
         </div>
-        {!impersonating && (
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              onClick={handleManageBilling}
-              disabled={portalLoading}
-              size="lg"
-            >
-              {portalLoading ? "Opening..." : "Manage Billing"}
-            </Button>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            onClick={handleManageBilling}
+            disabled={portalLoading}
+            size="lg"
+          >
+            {portalLoading ? "Opening..." : "Manage Billing"}
+          </Button>
+        </div>
       </div>
 
       {data?.nextPaymentDate && (
