@@ -15,9 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, User, Mail, MapPin, Clock, Package, CheckCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, User, Mail, Clock, Package, CheckCircle } from "lucide-react";
 import { CustomSelect } from "@/components/ui/custom-select";
-import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import {
   Dialog,
   DialogContent,
@@ -59,11 +58,6 @@ export default function AdminPage() {
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [selectedUnits, setSelectedUnits] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("pending");
-  const [addressStreet, setAddressStreet] = useState("");
-  const [addressCity, setAddressCity] = useState("");
-  const [addressState, setAddressState] = useState("");
-  const [addressZip, setAddressZip] = useState("");
-  const [addInstallAddressStandardized, setAddInstallAddressStandardized] = useState(false);
 
   // Fetch installs (from users with installDate)
   useEffect(() => {
@@ -654,19 +648,12 @@ export default function AdminPage() {
         open={isAddDialogOpen} 
         onOpenChange={(open) => {
           setIsAddDialogOpen(open);
-          if (open) {
-            setAddInstallAddressStandardized(false);
-          } else {
+          if (!open) {
             setSelectedCustomerId("");
             setIsNewCustomer(false);
             setSelectedTime("");
             setSelectedUnits("");
             setSelectedStatus("pending");
-            setAddressStreet("");
-            setAddressCity("");
-            setAddressState("");
-            setAddressZip("");
-            setAddInstallAddressStandardized(false);
           }
         }}
       >
@@ -688,16 +675,6 @@ export default function AdminPage() {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
               const dateVal = formData.get("date") as string;
-              const street = addressStreet.trim();
-              const city = addressCity.trim();
-              const state = addressState.trim();
-              const zip = addressZip.trim();
-              const addressVal = [street, city, state, zip].filter(Boolean).join(", ");
-
-              if (addressVal && !addInstallAddressStandardized) {
-                alert("Please select an address from the suggestions to standardize it.");
-                return;
-              }
 
               try {
                 if (isNewCustomer) {
@@ -705,8 +682,8 @@ export default function AdminPage() {
                   const customerEmail = (formData.get("customerEmail") as string)?.trim() ?? "";
                   const [firstName, ...lastParts] = customerName.split(/\s+/);
                   const lastName = lastParts.join(" ") || "";
-                  if (!firstName || !customerEmail || !addressVal) {
-                    alert("Please enter name, email, and address (Street, City, State, ZIP).");
+                  if (!firstName || !customerEmail) {
+                    alert("Please enter name and email.");
                     return;
                   }
                   const res = await fetch("/api/admin/pending-customers", {
@@ -716,10 +693,6 @@ export default function AdminPage() {
                       firstName,
                       lastName,
                       email: customerEmail,
-                      street: street || undefined,
-                      city: city || undefined,
-                      state: state || undefined,
-                      zip: zip || undefined,
                     }),
                   });
                   if (!res.ok) {
@@ -735,7 +708,7 @@ export default function AdminPage() {
                   const installDateStr = dateVal ? new Date(dateVal).toISOString().split("T")[0] : "";
                   const patchForm = new FormData();
                   patchForm.append("installDate", installDateStr);
-                  patchForm.append("installAddress", addressVal);
+                  patchForm.append("installAddress", "");
                   patchForm.append("notes", "");
                   const patchRes = await fetch(`/api/admin/users/${selectedCustomerId}/install`, {
                     method: "PATCH",
@@ -826,74 +799,6 @@ export default function AdminPage() {
                     </div>
                   </>
                 )}
-                
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-2 sm:col-span-2">
-                    <label htmlFor="addressStreet" className="text-sm font-medium text-foreground">
-                      Street <span className="text-destructive">*</span>
-                    </label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
-                      <AddressAutocomplete
-                        id="addressStreet"
-                        value={addressStreet}
-                        onChange={setAddressStreet}
-                        onPlaceSelect={({ street: s, city: c, state: st, zip: z }) => {
-                          setAddressStreet(s);
-                          setAddressCity(c);
-                          setAddressState(st);
-                          setAddressZip(z);
-                        }}
-                        onStandardizedChange={setAddInstallAddressStandardized}
-                        placeholder="Street address"
-                        required
-                        className="pl-10 h-10 rounded-lg border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 hover:border-primary/50 transition-all"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="addressCity" className="text-sm font-medium text-foreground">
-                      City <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      id="addressCity"
-                      name="addressCity"
-                      placeholder="City"
-                      required
-                      value={addressCity}
-                      onChange={(e) => setAddressCity(e.target.value)}
-                      className="h-10 rounded-lg border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="addressState" className="text-sm font-medium text-foreground">
-                      State <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      id="addressState"
-                      name="addressState"
-                      placeholder="State"
-                      required
-                      value={addressState}
-                      onChange={(e) => setAddressState(e.target.value)}
-                      className="h-10 rounded-lg border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="addressZip" className="text-sm font-medium text-foreground">
-                      ZIP <span className="text-destructive">*</span>
-                    </label>
-                    <Input
-                      id="addressZip"
-                      name="addressZip"
-                      placeholder="ZIP"
-                      required
-                      value={addressZip}
-                      onChange={(e) => setAddressZip(e.target.value)}
-                      className="h-10 rounded-lg border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
-                    />
-                  </div>
-                </div>
               </div>
             </div>
 
