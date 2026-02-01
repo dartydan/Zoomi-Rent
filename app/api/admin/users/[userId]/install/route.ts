@@ -19,17 +19,19 @@ function getStripe(): Stripe | null {
   return new Stripe(key);
 }
 
-/** Sum of all paid Stripe invoices for the customer (lifetime value in dollars). */
+/** Sum of all successful charges for the customer (lifetime value in dollars). */
 async function computeLifetimeValue(stripeCustomerId: string): Promise<number> {
   const stripe = getStripe();
   if (!stripe) return 0;
   try {
-    const invoices = await stripe.invoices.list({
+    // Fetch all successful charges (includes subscriptions, one-time payments, etc.)
+    const charges = await stripe.charges.list({
       customer: stripeCustomerId,
-      status: "paid",
       limit: 100,
     });
-    const totalCents = invoices.data.reduce((sum, inv) => sum + (inv.amount_paid ?? 0), 0);
+    const totalCents = charges.data
+      .filter((charge) => charge.status === "succeeded" && !charge.refunded)
+      .reduce((sum, charge) => sum + charge.amount, 0);
     return totalCents / 100;
   } catch {
     return 0;
