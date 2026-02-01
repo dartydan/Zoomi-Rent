@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useTheme } from "next-themes";
 import { useAuth } from "@clerk/nextjs";
+import { LogOut, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGetStarted } from "@/components/GetStartedContext";
 
@@ -14,7 +16,9 @@ type MarketingHeaderProps = {
 export function MarketingHeader({ variant = "default" }: MarketingHeaderProps) {
   const { isSignedIn, signOut } = useAuth();
   const { openGetStarted } = useGetStarted();
+  const { setTheme, resolvedTheme } = useTheme();
   const [isScrolled, setIsScrolled] = useState(false);
+  const isDark = resolvedTheme === "dark";
 
   useEffect(() => {
     const handleScroll = () => {
@@ -91,24 +95,35 @@ export function MarketingHeader({ variant = "default" }: MarketingHeaderProps) {
               >
                 Reviews
               </a>
-              {isSignedIn ? (
-                <Button variant="default" size="default" className="hover:scale-105 transition-transform" asChild>
-                  <Link href="/dashboard">Dashboard</Link>
-                </Button>
-              ) : (
+              {!isSignedIn && (
                 <Button variant="default" size="default" className="hover:scale-105 transition-transform" onClick={() => openGetStarted()}>
                   Get Started
                 </Button>
               )}
             </>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative h-9 w-9 shrink-0"
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            <Sun className="h-4 w-4 scale-0 transition-all dark:scale-100" />
+            <Moon className="absolute h-4 w-4 scale-100 transition-all dark:scale-0" />
+          </Button>
           {isSignedIn ? (
-            <Button variant="default" size="default" className="bg-foreground text-background hover:bg-foreground/90" onClick={() => signOut({ redirectUrl: "/" })}>
-              Log out
+            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => signOut({ redirectUrl: "/" })} aria-label="Log out">
+              <LogOut className="h-4 w-4" />
             </Button>
           ) : (
             <Button variant="default" size="default" className="bg-foreground text-background hover:bg-foreground/90" asChild>
               <Link href="/login">Login</Link>
+            </Button>
+          )}
+          {isSignedIn && (
+            <Button variant="default" size="lg" className="min-w-[140px] sm:min-w-[160px] hover:scale-105 transition-transform" asChild>
+              <Link href="/dashboard">Dashboard</Link>
             </Button>
           )}
         </nav>

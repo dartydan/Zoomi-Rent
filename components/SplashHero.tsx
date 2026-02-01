@@ -7,7 +7,10 @@ import { useGetStarted } from "@/components/GetStartedContext";
 export function SplashHero() {
   const { openGetStarted } = useGetStarted();
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-primary/5">
+    <section
+      className="relative overflow-hidden"
+      style={{ backgroundColor: "#1e1b18" }}
+    >
       {/* Hero image background */}
       <div className="absolute inset-0 z-0">
         <img
@@ -19,12 +22,6 @@ export function SplashHero() {
         <div className="absolute inset-0 bg-black/70" aria-hidden />
       </div>
 
-      {/* Decorative gradient orbs */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-1/2 -right-1/2 w-[800px] h-[800px] bg-primary/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-1/2 -left-1/2 w-[800px] h-[800px] bg-primary/10 rounded-full blur-3xl" />
-      </div>
-
       {/* Content */}
       <div className="relative z-10 px-4 py-16 sm:py-20 md:py-24">
         <div className="mx-auto max-w-5xl space-y-8 text-center">
@@ -34,9 +31,9 @@ export function SplashHero() {
             transition={{ duration: 0.8 }}
             className="space-y-6"
           >
-            <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-5 py-2.5 backdrop-blur-sm border-2 border-primary/20">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold text-primary">Headache-Free • We Handle Everything</span>
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#1e1b18] px-5 py-2.5 text-background dark:bg-foreground dark:text-background">
+              <Sparkles className="h-4 w-4" />
+              <span className="text-sm font-semibold">Headache-Free • We Handle Everything</span>
             </div>
             
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
@@ -92,8 +89,8 @@ export function SplashHero() {
         </div>
       </div>
 
-      {/* Bottom fade */}
-      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-background to-transparent z-10" />
+      {/* Fade into light content block below */}
+      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent z-10" aria-hidden />
     </section>
   );
 }

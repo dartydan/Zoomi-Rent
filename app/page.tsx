@@ -31,22 +31,8 @@ function PhotoGallerySection() {
   ];
 
   return (
-    <section className="px-4 py-20 sm:py-24 bg-muted/30" aria-labelledby="gallery-heading">
-      <div className="mx-auto max-w-6xl space-y-12">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="text-center space-y-4"
-        >
-          <h2 id="gallery-heading" className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            See It In Action
-          </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Quality appliances that fit perfectly into your home
-          </p>
-        </motion.div>
+    <section className="px-4 py-20 sm:py-24 bg-muted/30" aria-label="Photo gallery">
+      <div className="mx-auto max-w-6xl">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {photos.map((photo, index) => (
             <motion.div
@@ -91,7 +77,7 @@ function HowItWorksSection() {
             How It Works
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Get started in four simple steps
+            From sign-up to your customer portal—here’s how we get you set up.
           </p>
         </motion.div>
         <HowItWorksTimeline />
@@ -200,20 +186,24 @@ function MarketingFooter() {
   );
 }
 
+const LANDING_DARK = "#1e1b18"; // theme dark background – hero becomes page background
+
 export default function Home() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen" style={{ backgroundColor: LANDING_DARK }}>
       <MarketingHeader />
       <SplashHero />
-      <div id="benefits">
-        <BenefitsWithIcons />
+      <div className="bg-background">
+        <PricingSection />
+        <HowItWorksSection />
+        <div id="benefits">
+          <BenefitsWithIcons />
+        </div>
+        <PhotoGallerySection />
+        <TestimonialsSection />
+        <CTASection />
+        <MarketingFooter />
       </div>
-      <PhotoGallerySection />
-      <HowItWorksSection />
-      <PricingSection />
-      <TestimonialsSection />
-      <CTASection />
-      <MarketingFooter />
     </div>
   );
 }
