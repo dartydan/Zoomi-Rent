@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -116,13 +116,16 @@ export function AddressAutocomplete({
 
   // Base version: plain address input (no Google). Same API so callers work unchanged; easy to swap back to Google later.
   if (!USE_GOOGLE_AUTOCOMPLETE) {
+    const [localValue, setLocalValue] = useState(value);
+    
     return (
       <Input
         id={id}
         type="text"
-        value={value}
+        value={localValue}
         onChange={(e) => {
           const v = e.target.value;
+          setLocalValue(v);
           onChange(v);
           // For plain text input, mark as standardized once user types (no validation requirement)
           onStandardizedChange?.(true);
