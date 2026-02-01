@@ -12,7 +12,7 @@ Copy `.env.example` to `.env.local` and fill in your keys:
 cp .env.example .env.local
 ```
 
-- **Clerk**: Create an account at [clerk.com](https://clerk.com), create an application, and add your keys. In the Clerk Dashboard, configure **User & authentication** to use **Email verification link** (magic link) only.
+- **Clerk**: Create an account at [clerk.com](https://clerk.com), create an application, and add your keys. In the Clerk Dashboard, configure **User & authentication** to use **Email verification code** (one-time code sent to email) only.
 - **Stripe**: Add your publishable key (client-side) and secret key (server-side). Get both from [Stripe Dashboard → Developers → API keys](https://dashboard.stripe.com/apikeys).
 - **Google Maps (optional, for address autocomplete)**: Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to enable address autocomplete in the Get Started form. In [Google Cloud Console](https://console.cloud.google.com/), enable **Maps JavaScript API** and **Places API**, create an API key, and restrict it to **HTTP referrers** (e.g. `https://yourdomain.com/*`, `http://localhost:*`) and to those two APIs. Without the key, the address field works as a normal text input.
 
@@ -34,6 +34,8 @@ Open [http://localhost:3000](http://localhost:3000).
 1. Push to GitHub and connect the repo in Vercel.
 2. Add environment variables in Vercel project settings.
 3. Deploy.
+
+**Production sign-in:** If users see "Use another method" / "Facing issues?" on the live site, configure Clerk for production: add your domain and redirect URLs in the Clerk Dashboard. See [docs/CLERK_PRODUCTION.md](docs/CLERK_PRODUCTION.md).
 
 ## Features
 

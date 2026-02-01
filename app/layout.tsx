@@ -44,7 +44,17 @@ export default function RootLayout({
   );
 
   if (hasClerkKey) {
-    return <ClerkProvider>{content}</ClerkProvider>;
+    return (
+      <ClerkProvider
+        signInUrl="/login"
+        signUpUrl="/login"
+        afterSignInUrl="/dashboard"
+        afterSignUpUrl="/dashboard"
+        afterSignOutUrl="/"
+      >
+        {content}
+      </ClerkProvider>
+    );
   }
   return content;
 }

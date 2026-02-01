@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
+import { useSearchParams } from "next/navigation";
 import { PaymentHistory } from "./PaymentHistory";
 import { EndServicesButton } from "./EndServicesButton";
 import { Button } from "@/components/ui/button";
@@ -33,25 +34,48 @@ interface DashboardData {
   subscriptionLabel: string | null;
 }
 
+type AdminUser = {
+  id: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+};
+
 const CUSTOMER_PORTAL_VIEW_COOKIE = "customer_portal_view";
 
 export function DashboardContent() {
   const { user, isLoaded } = useUser();
+  const searchParams = useSearchParams();
+  const impersonateUserId = searchParams.get("viewAs") ?? "";
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const isAdmin = (user?.publicMetadata?.role as string | undefined) === "admin";
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
 
   useEffect(() => {
     document.cookie = `${CUSTOMER_PORTAL_VIEW_COOKIE}=; path=/; max-age=0`;
   }, []);
 
   useEffect(() => {
+    if (!isLoaded || !isAdmin) return;
+    let cancelled = false;
+    fetch("/api/admin/users")
+      .then((res) => (res.ok ? res.json() : Promise.resolve({ users: [] })))
+      .then((body: { users?: AdminUser[] }) => {
+        if (!cancelled && body.users?.length) setAdminUsers(body.users);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isLoaded, isAdmin]);
+
+  useEffect(() => {
     if (!isLoaded) return;
+    setLoading(true);
     async function fetchData() {
-      // In development mode without auth, show mock data (only after Clerk has loaded)
       const isDevelopment = process.env.NODE_ENV === "development";
-      if (isDevelopment && !user) {
+      if (isDevelopment && !user && !isAdmin) {
         // Mock data for demo purposes
         const mockData: DashboardData = {
           customerId: "demo_customer",
@@ -87,8 +111,12 @@ export function DashboardContent() {
         return;
       }
 
+      setError(null);
       try {
-        const customerRes = await fetch("/api/stripe/customer");
+        const customerUrl = isAdmin && impersonateUserId
+          ? `/api/stripe/customer?userId=${encodeURIComponent(impersonateUserId)}`
+          : "/api/stripe/customer";
+        const customerRes = await fetch(customerUrl, { cache: "no-store" });
         const customerData = await customerRes.json();
 
         if (!customerRes.ok) {
@@ -112,8 +140,8 @@ export function DashboardContent() {
         }
 
         const [invoicesRes, subscriptionRes] = await Promise.all([
-          fetch(`/api/stripe/invoices?customerId=${customerId}`),
-          fetch(`/api/stripe/subscription?customerId=${customerId}`),
+          fetch(`/api/stripe/invoices?customerId=${customerId}`, { cache: "no-store" }),
+          fetch(`/api/stripe/subscription?customerId=${customerId}`, { cache: "no-store" }),
         ]);
 
         const invoicesData = await invoicesRes.json();
@@ -143,7 +171,7 @@ export function DashboardContent() {
     }
 
     fetchData();
-  }, [user, isLoaded]);
+  }, [user, isLoaded, isAdmin, impersonateUserId]);
 
   const handleManageBilling = async () => {
     if (!data?.customerId) return;
@@ -209,28 +237,33 @@ export function DashboardContent() {
       currency: currency.toUpperCase(),
     }).format(amount / 100);
 
+  const impersonating = isAdmin && impersonateUserId;
+  const impersonateUser = impersonating ? adminUsers.find((u) => u.id === impersonateUserId) : null;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-0.5">
           <h1 className="text-2xl font-bold text-foreground">
-            Welcome{user?.firstName ? `, ${user.firstName}` : !user && process.env.NODE_ENV === "development" ? ", Demo User" : ""}
+            Welcome{!impersonating && user?.firstName ? `, ${user.firstName}` : impersonating && impersonateUser ? ` — viewing ${[impersonateUser.firstName, impersonateUser.lastName].filter(Boolean).join(" ").trim() || impersonateUser.email}` : !user && process.env.NODE_ENV === "development" ? ", Demo User" : ""}
           </h1>
           <p className="text-sm text-muted-foreground">
             Manage your washer and dryer rental billing.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            onClick={handleManageBilling}
-            disabled={portalLoading}
-            size="lg"
-          >
-            {portalLoading ? "Opening..." : "Manage Billing"}
-          </Button>
-          <EndServicesButton />
-        </div>
+        {!impersonating && (
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              onClick={handleManageBilling}
+              disabled={portalLoading}
+              size="lg"
+            >
+              {portalLoading ? "Opening..." : "Manage Billing"}
+            </Button>
+            <EndServicesButton />
+          </div>
+        )}
       </div>
 
       {data?.nextPaymentDate && (
