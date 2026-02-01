@@ -27,22 +27,40 @@ export async function GET(request: Request) {
     }
 
     const stripe = getStripe();
-    const invoices = await stripe.invoices.list({
-      customer: customerId,
-      status: "paid",
-      limit: 24,
-    });
+    const charges: Stripe.Charge[] = [];
+    let hasMore = true;
+    let startingAfter: string | undefined;
+    while (hasMore) {
+      const list = await stripe.charges.list({
+        customer: customerId,
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+      charges.push(...list.data);
+      hasMore = list.has_more;
+      if (list.data.length > 0) {
+        startingAfter = list.data[list.data.length - 1].id;
+      } else {
+        hasMore = false;
+      }
+    }
+    charges.sort((a, b) => b.created - a.created);
 
-    const formattedInvoices = invoices.data.map((inv) => ({
-      id: inv.id,
-      number: inv.number,
-      amountPaid: inv.amount_paid,
-      currency: inv.currency,
-      created: inv.created,
-      status: inv.status,
-      invoicePdf: inv.invoice_pdf,
-      hostedInvoiceUrl: inv.hosted_invoice_url,
-    }));
+    const formattedInvoices = charges.map((ch) => {
+      const amountRefunded = ch.amount_refunded ?? 0;
+      const netAmount = ch.amount - amountRefunded;
+      return {
+        id: ch.id,
+        number: ch.receipt_number ?? ch.id,
+        amountPaid: netAmount,
+        currency: ch.currency,
+        created: ch.created,
+        status: ch.status,
+        refunded: ch.refunded,
+        invoicePdf: ch.receipt_url ?? null,
+        hostedInvoiceUrl: ch.receipt_url ?? null,
+      };
+    });
 
     return NextResponse.json({ invoices: formattedInvoices });
   } catch (error) {

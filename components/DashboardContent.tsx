@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
 import { PaymentHistory } from "./PaymentHistory";
-import { EndServicesButton } from "./EndServicesButton";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,6 +20,7 @@ interface Invoice {
   currency: string;
   created: number;
   status: string;
+  refunded?: boolean;
   invoicePdf: string | null;
   hostedInvoiceUrl: string | null;
 }
@@ -261,7 +261,6 @@ export function DashboardContent() {
             >
               {portalLoading ? "Opening..." : "Manage Billing"}
             </Button>
-            <EndServicesButton />
           </div>
         )}
       </div>

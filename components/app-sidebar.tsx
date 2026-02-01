@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth, useClerk, useUser } from "@clerk/nextjs";
-import { Home, LogIn, LogOut, Users, Building, DollarSign, BarChart3, LayoutDashboard } from "lucide-react";
+import { Home, LogIn, LogOut, Users, Building, DollarSign, BarChart3, LayoutDashboard, XCircle, Lock } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/sidebar";
 
 const CUSTOMER_PORTAL_VIEW_COOKIE = "customer_portal_view";
+const END_SERVICES_MAILTO =
+  "mailto:help@zoomi.co?subject=End%20Rental%20Request&body=I%20would%20like%20to%20end%20my%20washer%2Fdryer%20rental.";
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -145,6 +147,16 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              {isSignedIn && user?.passwordEnabled === false && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={pathname.startsWith("/dashboard/user-profile")}>
+                    <Link href="/dashboard/user-profile/security">
+                      <Lock />
+                      <span>Set password</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               {isSignedIn && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
@@ -164,6 +176,16 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
+              {isSignedIn && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild className="gap-2 text-muted-foreground hover:text-destructive">
+                    <a href={END_SERVICES_MAILTO}>
+                      <XCircle className="h-4 w-4" />
+                      <span>End Services</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               {isSignedIn && isAdminUser && (
                 <SidebarMenuItem>
                   <SidebarMenuButton onClick={goToAdmin} className="gap-2">

@@ -55,14 +55,14 @@ function ViewAsSelect() {
   };
 
   return (
-    <div className="flex items-center gap-2 min-w-0 max-w-[220px] sm:max-w-[280px]">
+    <div className="flex items-center gap-2 min-w-[180px] w-full max-w-[min(100%,360px)]">
       <span className="text-xs font-medium text-muted-foreground shrink-0 hidden sm:inline">View as:</span>
       <CustomSelect
         value={viewAs}
         onChange={handleChange}
         placeholder="Select customer"
         icon={<User className="h-4 w-4" />}
-        className="h-9 text-sm"
+        className="h-9 text-sm min-w-0 flex-1"
         options={[
           { value: "", label: "Myself" },
           ...adminUsers.map((u) => ({

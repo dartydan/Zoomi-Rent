@@ -28,33 +28,122 @@ export async function GET(request: Request) {
 
     const stripe = getStripe();
     const expand = ["data.items.data.price"];
-    const [activeList, trialingList] = await Promise.all([
-      stripe.subscriptions.list({ customer: customerId, status: "active", limit: 1, expand }),
-      stripe.subscriptions.list({ customer: customerId, status: "trialing", limit: 1, expand }),
+    const now = Math.floor(Date.now() / 1000);
+
+    type NextPayment = {
+      date: string;
+      amount: number;
+      currency: string;
+      label: string | null;
+      subscription?: Stripe.Subscription;
+    };
+    const candidates: NextPayment[] = [];
+
+    const [activeList, trialingList, schedulesList] = await Promise.all([
+      stripe.subscriptions.list({ customer: customerId, status: "active", limit: 10, expand }),
+      stripe.subscriptions.list({ customer: customerId, status: "trialing", limit: 10, expand }),
+      stripe.subscriptionSchedules.list({ customer: customerId, limit: 10 }),
     ]);
-    const subscription = activeList.data[0] ?? trialingList.data[0];
-    const nextPaymentDate = subscription?.current_period_end
-      ? new Date(subscription.current_period_end * 1000).toISOString()
-      : null;
-    const item = subscription?.items?.data?.[0];
-    const price = item?.price;
+
+    const allSubs = [...activeList.data, ...trialingList.data];
+    for (const subscription of allSubs) {
+      const periodEnd = subscription.current_period_end;
+      if (periodEnd < now) continue;
+      let amount: number | null = null;
+      let currency: string = "usd";
+      try {
+        const upcoming = await stripe.invoices.retrieveUpcoming({
+          customer: customerId,
+          subscription: subscription.id,
+        });
+        if (upcoming?.amount_due != null && upcoming.currency) {
+          amount = upcoming.amount_due;
+          currency = upcoming.currency;
+        }
+      } catch {
+        // fall back to price
+      }
+      if (amount == null) {
+        const item = subscription.items?.data?.[0];
+        const price = item?.price;
+        if (price?.unit_amount != null && price?.currency) {
+          amount = price.unit_amount;
+          currency = price.currency;
+        }
+      }
+      if (amount == null) continue;
+      const productId =
+        typeof subscription.items?.data?.[0]?.price?.product === "string"
+          ? subscription.items.data[0].price.product
+          : (subscription.items?.data?.[0]?.price?.product as { id?: string })?.id;
+      let label: string | null = null;
+      if (productId) {
+        try {
+          const product = await stripe.products.retrieve(productId);
+          label = product.name;
+        } catch {
+          //
+        }
+      }
+      candidates.push({
+        date: new Date(periodEnd * 1000).toISOString(),
+        amount,
+        currency,
+        label: label || (subscription ? "Active" : null),
+        subscription,
+      });
+    }
+
+    const notStartedSchedules = schedulesList.data.filter((s) => s.status === "not_started");
+    for (const schedule of notStartedSchedules) {
+      const phases = schedule.phases ?? [];
+      const nextPhase = phases.find((p) => p.start_date >= now) ?? phases[0];
+      if (!nextPhase || nextPhase.start_date < now) continue;
+      const item = nextPhase.items?.[0];
+      const priceId = typeof item?.price === "string" ? item.price : undefined;
+      if (!priceId) continue;
+      let unitAmount: number | null = null;
+      let currency = "usd";
+      let productId: string | undefined;
+      try {
+        const price = await stripe.prices.retrieve(priceId);
+        unitAmount = price.unit_amount;
+        currency = price.currency ?? "usd";
+        productId = typeof price.product === "string" ? price.product : (price.product as { id?: string })?.id;
+      } catch {
+        continue;
+      }
+      if (unitAmount == null) continue;
+      let label: string | null = "Subscription";
+      if (productId) {
+        try {
+          const product = await stripe.products.retrieve(productId);
+          label = product.name;
+        } catch {
+          //
+        }
+      }
+      candidates.push({
+        date: new Date(nextPhase.start_date * 1000).toISOString(),
+        amount: unitAmount,
+        currency,
+        label,
+      });
+    }
+
+    candidates.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const soonest = candidates[0];
+    const nextPaymentDate = soonest?.date ?? null;
     const nextPaymentAmount =
-      price?.unit_amount != null && price?.currency
-        ? { amount: price.unit_amount, currency: price.currency }
-        : null;
-    const productId =
-      typeof price?.product === "string" ? price.product : (price?.product as { id?: string })?.id;
-    const product = productId ? await stripe.products.retrieve(productId) : null;
-    const subscriptionLabel =
-      product?.name ||
-      (price as { nickname?: string } | null)?.nickname ||
-      (subscription ? "Active" : null);
+      soonest != null ? { amount: soonest.amount, currency: soonest.currency } : null;
+    const subscriptionLabel = soonest?.label ?? null;
+    const hasActiveSubscription = allSubs.length > 0;
 
     return NextResponse.json({
       nextPaymentDate,
       nextPaymentAmount,
-      hasActiveSubscription: !!subscription,
-      subscriptionLabel: subscriptionLabel ?? null,
+      hasActiveSubscription,
+      subscriptionLabel,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

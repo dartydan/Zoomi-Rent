@@ -116,7 +116,7 @@ export function CustomSelect({
       {/* Dropdown rendered inline so it stays inside dialog/focus scope and is clickable */}
       {isOpen && (
         <div
-          className="absolute left-0 top-full z-[9999] mt-2 w-full min-w-full rounded-xl border-2 border-border bg-background shadow-lg overflow-hidden"
+          className="absolute left-0 top-full z-[9999] mt-2 w-max min-w-full max-w-[min(100vw,24rem)] rounded-xl border-2 border-border bg-background shadow-lg overflow-hidden"
           role="listbox"
           onMouseDown={(e) => e.preventDefault()}
         >
@@ -135,13 +135,13 @@ export function CustomSelect({
                     e.stopPropagation();
                   }}
                   className={cn(
-                    "flex w-full items-center justify-between px-4 py-2.5 text-sm text-left cursor-pointer transition-colors",
+                    "flex w-full min-w-0 items-center justify-between gap-2 px-4 py-2.5 text-sm text-left cursor-pointer transition-colors",
                     "hover:bg-accent hover:text-accent-foreground",
                     "focus-visible:outline-none focus-visible:bg-accent focus-visible:text-accent-foreground",
                     isSelected && "bg-primary/20 font-medium text-foreground"
                   )}
                 >
-                  <span className="truncate">{option.label}</span>
+                  <span className="break-words text-left">{option.label}</span>
                   {isSelected && <Check className="h-4 w-4 text-primary ml-2 flex-shrink-0" />}
                 </button>
               );

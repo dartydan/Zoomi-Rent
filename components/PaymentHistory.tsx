@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { Download, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 interface Invoice {
   id: string;
@@ -92,7 +93,12 @@ export function PaymentHistory({ invoices }: PaymentHistoryProps) {
                     )}
                   </TableCell>
                   <TableCell className="font-semibold">
-                    {formatAmount(invoice.amountPaid, invoice.currency)}
+                    <span>{formatAmount(Math.abs(invoice.amountPaid), invoice.currency)}</span>
+                    {invoice.refunded && (
+                      <Badge variant="secondary" className="ml-2 text-xs">
+                        Refunded
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-center pr-6">
                     {invoice.invoicePdf ? (
