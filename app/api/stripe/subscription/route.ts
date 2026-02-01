@@ -10,21 +10,45 @@ function getStripe() {
   return new Stripe(key);
 }
 
-function applySubscriptionDiscount(
+/** Apply a single coupon to an amount; fetches coupon from Stripe when given an id. */
+async function applyCouponToAmount(
+  stripe: Stripe,
+  amount: number,
+  currency: string,
+  coupon: string | Stripe.Coupon | Stripe.DeletedCoupon | null
+): Promise<number> {
+  if (!coupon) return amount;
+  let c: Stripe.Coupon | Stripe.DeletedCoupon | null =
+    typeof coupon === "object" && "object" in coupon ? coupon : null;
+  if (typeof coupon === "string") {
+    try {
+      c = await stripe.coupons.retrieve(coupon);
+    } catch {
+      return amount;
+    }
+  }
+  if (!c || typeof c !== "object" || c.deleted) return amount;
+  if (c.percent_off != null && c.percent_off > 0) {
+    return Math.max(0, Math.round(amount * (1 - c.percent_off / 100)));
+  }
+  if (c.amount_off != null && c.amount_off > 0 && c.currency === currency) {
+    return Math.max(0, amount - c.amount_off);
+  }
+  return amount;
+}
+
+async function applySubscriptionDiscount(
+  stripe: Stripe,
   baseAmount: number,
   currency: string,
   subscription: Stripe.Subscription
-): number {
+): Promise<number> {
   const discounts = subscription.discounts ?? (subscription.discount ? [subscription.discount] : []);
   let amount = baseAmount;
   for (const d of discounts) {
     const coupon = typeof d === "object" && d && "coupon" in d ? d.coupon : null;
-    if (!coupon || typeof coupon !== "object") continue;
-    if (coupon.percent_off != null && coupon.percent_off > 0) {
-      amount = amount * (1 - coupon.percent_off / 100);
-    } else if (coupon.amount_off != null && coupon.amount_off > 0 && coupon.currency === currency) {
-      amount = amount - coupon.amount_off;
-    }
+    if (!coupon) continue;
+    amount = await applyCouponToAmount(stripe, amount, currency, coupon);
   }
   return Math.max(0, Math.round(amount));
 }
@@ -112,7 +136,7 @@ export async function GET(request: Request) {
         if (price?.unit_amount != null && price?.currency) {
           const baseAmount = price.unit_amount * quantity;
           currency = price.currency;
-          amount = applySubscriptionDiscount(baseAmount, currency, subscription);
+          amount = await applySubscriptionDiscount(stripe, baseAmount, currency, subscription);
         }
       }
       if (amount == null) continue;
@@ -146,6 +170,7 @@ export async function GET(request: Request) {
       const item = nextPhase.items?.[0];
       const priceId = typeof item?.price === "string" ? item.price : undefined;
       if (!priceId) continue;
+      const quantity = item?.quantity ?? 1;
       let unitAmount: number | null = null;
       let currency = "usd";
       let productId: string | undefined;
@@ -158,6 +183,22 @@ export async function GET(request: Request) {
         continue;
       }
       if (unitAmount == null) continue;
+      let baseAmount = unitAmount * quantity;
+      if (nextPhase.coupon) {
+        baseAmount = await applyCouponToAmount(
+          stripe,
+          baseAmount,
+          currency,
+          nextPhase.coupon
+        );
+      }
+      const phaseDiscounts = nextPhase.discounts ?? [];
+      for (const d of phaseDiscounts) {
+        const coupon = typeof d === "object" && d && "coupon" in d ? d.coupon : null;
+        if (coupon) {
+          baseAmount = await applyCouponToAmount(stripe, baseAmount, currency, coupon);
+        }
+      }
       let label: string | null = "Subscription";
       if (productId) {
         try {
@@ -169,7 +210,7 @@ export async function GET(request: Request) {
       }
       candidates.push({
         date: new Date(nextPhase.start_date * 1000).toISOString(),
-        amount: unitAmount,
+        amount: Math.max(0, Math.round(baseAmount)),
         currency,
         label,
       });
