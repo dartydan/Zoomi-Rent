@@ -63,51 +63,55 @@ export function PaymentHistory({ invoices }: PaymentHistoryProps) {
             Your invoices will appear here once you have made payments.
           </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-b-2">
-                <TableHead className="font-semibold pl-6">Date</TableHead>
-                <TableHead className="font-semibold">Invoice</TableHead>
-                <TableHead className="font-semibold">Amount</TableHead>
-                <TableHead className="text-center font-semibold pr-6">Receipt</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <>
+            {/* Mobile: grid with labels */}
+            <div className="block sm:hidden border-t">
+              <div className="grid grid-cols-4 gap-2 px-4 py-3 border-b bg-muted/30 text-sm font-semibold text-muted-foreground">
+                <span>Date</span>
+                <span>Invoice</span>
+                <span>Amount</span>
+                <span className="text-center">Receipt</span>
+              </div>
               {invoices.map((invoice) => (
-                <TableRow key={invoice.id} className="hover:bg-muted/50 transition-colors">
-                  <TableCell className="font-medium pl-6">
+                <div
+                  key={invoice.id}
+                  className="grid grid-cols-4 gap-2 px-4 py-3 items-center border-b last:border-b-0 hover:bg-muted/50 transition-colors text-sm min-w-0"
+                >
+                  <span className="font-medium truncate" title={formatDate(invoice.created)}>
                     {formatDate(invoice.created)}
-                  </TableCell>
-                  <TableCell>
+                  </span>
+                  <span className="min-w-0">
                     {invoice.hostedInvoiceUrl ? (
                       <a
                         href={invoice.hostedInvoiceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-primary hover:underline underline-offset-4 font-medium"
+                        className="text-primary hover:underline underline-offset-4 font-medium truncate block"
+                        aria-label={`View invoice ${invoice.number || invoice.id}`}
                       >
-                        {invoice.number || invoice.id}
-                        <ExternalLink className="h-3.5 w-3.5" />
+                        View
                       </a>
                     ) : (
-                      <span className="font-medium">{invoice.number || invoice.id}</span>
+                      <span className="text-muted-foreground truncate block">
+                        {invoice.number || invoice.id}
+                      </span>
                     )}
-                  </TableCell>
-                  <TableCell className="font-semibold">
-                    <span>{formatAmount(Math.abs(invoice.amountPaid), invoice.currency)}</span>
+                  </span>
+                  <span className="font-semibold truncate min-w-0">
+                    {formatAmount(Math.abs(invoice.amountPaid), invoice.currency)}
                     {invoice.refunded && (
-                      <Badge variant="secondary" className="ml-2 text-xs">
+                      <Badge variant="secondary" className="ml-1 text-xs shrink-0">
                         Refunded
                       </Badge>
                     )}
-                  </TableCell>
-                  <TableCell className="text-center pr-6">
+                  </span>
+                  <span className="flex justify-center min-w-0">
                     {invoice.invoicePdf ? (
                       <Button
                         variant="ghost"
                         size="sm"
                         asChild
-                        className="h-8 w-8 p-0 hover:bg-primary/10"
+                        className="h-8 w-8 p-0 hover:bg-primary/10 shrink-0"
                       >
                         <a
                           href={invoice.invoicePdf}
@@ -119,13 +123,80 @@ export function PaymentHistory({ invoices }: PaymentHistoryProps) {
                         </a>
                       </Button>
                     ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
+                      <span className="text-muted-foreground">—</span>
                     )}
-                  </TableCell>
-                </TableRow>
+                  </span>
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+            {/* Desktop: table */}
+            <div className="hidden sm:block overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent border-b-2">
+                    <TableHead className="font-semibold pl-6">Date</TableHead>
+                    <TableHead className="font-semibold">Invoice</TableHead>
+                    <TableHead className="font-semibold">Amount</TableHead>
+                    <TableHead className="text-center font-semibold pr-6">Receipt</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invoices.map((invoice) => (
+                    <TableRow key={invoice.id} className="hover:bg-muted/50 transition-colors">
+                      <TableCell className="font-medium pl-6 whitespace-nowrap">
+                        {formatDate(invoice.created)}
+                      </TableCell>
+                      <TableCell>
+                        {invoice.hostedInvoiceUrl ? (
+                          <a
+                            href={invoice.hostedInvoiceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-primary hover:underline underline-offset-4 font-medium"
+                            aria-label={`View invoice ${invoice.number || invoice.id}`}
+                          >
+                            View
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        ) : (
+                          <span className="font-medium">{invoice.number || invoice.id}</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-semibold">
+                        <span>{formatAmount(Math.abs(invoice.amountPaid), invoice.currency)}</span>
+                        {invoice.refunded && (
+                          <Badge variant="secondary" className="ml-2 text-xs">
+                            Refunded
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center pr-6">
+                        {invoice.invoicePdf ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            asChild
+                            className="h-8 w-8 p-0 hover:bg-primary/10"
+                          >
+                            <a
+                              href={invoice.invoicePdf}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label="Download receipt"
+                            >
+                              <Download className="h-4 w-4 text-primary" />
+                            </a>
+                          </Button>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
