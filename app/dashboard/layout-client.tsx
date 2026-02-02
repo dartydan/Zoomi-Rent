@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserButton, useUser } from "@clerk/nextjs";
@@ -90,6 +90,7 @@ export function DashboardLayoutClient({
         <AppSidebar />
         <SidebarInset>
           <header className="flex h-12 shrink-0 items-center gap-4 border-b border-border px-4">
+            <SidebarTrigger className="-ml-1" />
             <ViewAsSelect />
             <div className="flex flex-1 items-center gap-2 min-w-0" />
             <Button variant="ghost" size="sm" asChild>

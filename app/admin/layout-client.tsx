@@ -1,7 +1,7 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppSidebar } from "@/components/app-sidebar";
 import { UserButton } from "@clerk/nextjs";
@@ -24,6 +24,7 @@ export function AdminLayoutClient({
         <AppSidebar />
         <SidebarInset>
           <header className="flex h-12 shrink-0 items-center gap-4 border-b border-border px-4">
+            <SidebarTrigger className="-ml-1" />
             <div className="flex flex-1 items-center gap-2">
               <Badge variant="outline" className="text-xs">Admin</Badge>
             </div>

@@ -164,7 +164,7 @@ export function MarketingHeader({ variant = "default" }: MarketingHeaderProps) {
                 </Button>
               )}
               {!isSignedIn && (
-                <Button variant="default" size="default" className="min-w-[110px] hover:scale-105 transition-transform" onClick={() => openGetStarted()}>
+                <Button variant="default" size="default" className="hidden sm:inline-flex min-w-[110px] hover:scale-105 transition-transform" onClick={() => openGetStarted()}>
                   Get Started
                 </Button>
               )}
