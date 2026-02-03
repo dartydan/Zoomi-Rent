@@ -64,34 +64,38 @@ export async function GET(
     let nextPaymentCurrency = "usd";
 
     if (stripe && stripeCustomerId) {
-      const [chargesRes, invoicesRes] = await Promise.all([
-        stripe.charges.list({ customer: stripeCustomerId, limit: 100 }),
-        stripe.invoices.list({ customer: stripeCustomerId, status: "paid", limit: 100 }),
-      ]);
-      const byKey = new Map<string, { date: string; amount: number; currency: string }>();
-      const add = (date: string, amount: number, currency: string) => {
-        const key = `${date}-${amount}-${currency}`;
-        if (!byKey.has(key)) byKey.set(key, { date, amount, currency });
-      };
-      chargesRes.data
-        .filter((c) => c.status === "succeeded" && !c.refunded)
-        .forEach((c) => {
-          add(
-            new Date(c.created * 1000).toISOString(),
-            (c.amount - (c.amount_refunded ?? 0)) / 100,
-            (c.currency ?? "usd").toUpperCase()
-          );
+      // Use charges only: they are the source of truth for amount actually charged (net of coupons/discounts).
+      // amount - amount_refunded = net amount customer paid.
+      const chargesList: Stripe.Charge[] = [];
+      let hasMore = true;
+      let startingAfter: string | undefined;
+      while (hasMore) {
+        const chargesRes = await stripe.charges.list({
+          customer: stripeCustomerId,
+          limit: 100,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
         });
-      invoicesRes.data.forEach((inv) => {
-        const paidAt = inv.status_transitions?.paid_at ?? inv.created;
-        const amount = (inv.amount_paid ?? 0) / 100;
-        const currency = (inv.currency ?? "usd").toUpperCase();
-        if (amount > 0) add(new Date((paidAt as number) * 1000).toISOString(), amount, currency);
-      });
-      const merged = Array.from(byKey.values()).sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-      );
-      payments.push(...merged);
+        chargesList.push(...chargesRes.data);
+        hasMore = chargesRes.has_more;
+        if (chargesRes.data.length > 0) {
+          startingAfter = chargesRes.data[chargesRes.data.length - 1].id;
+        } else {
+          hasMore = false;
+        }
+      }
+      const paymentEntries = chargesList
+        .filter((c) => c.status === "succeeded")
+        .map((c) => {
+          const netCents = c.amount - (c.amount_refunded ?? 0);
+          return {
+            date: new Date(c.created * 1000).toISOString(),
+            amount: netCents / 100,
+            currency: (c.currency ?? "usd").toUpperCase(),
+          };
+        })
+        .filter((p) => p.amount > 0);
+      paymentEntries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      payments.push(...paymentEntries);
 
       const expand = ["data.items.data.price", "data.discounts", "data.discounts.coupon"];
       const now = Math.floor(Date.now() / 1000);

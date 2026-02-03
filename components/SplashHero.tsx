@@ -37,10 +37,8 @@ export function SplashHero() {
             </div>
             
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
-              <span className="text-white">Washer & Dryer Rental</span>
-              <span className="block text-primary mt-2">
-                Made Simple
-              </span>
+              <span className="text-white">Peace out ✌️</span>
+              <span className="block text-primary mt-2">Laundromat</span>
             </h1>
           </motion.div>
           
@@ -50,7 +48,7 @@ export function SplashHero() {
             transition={{ duration: 0.8, delay: 0.15 }}
             className="text-lg sm:text-xl md:text-2xl max-w-3xl mx-auto leading-relaxed text-gray-300 font-medium"
           >
-            Stop going to the laundromat. We deliver, install, service, and remove. One monthly payment. No hidden fees.
+            Washer and dryer rental made simple. We deliver, install, service, and remove. One monthly payment. No hidden fees.
           </motion.p>
           
           <motion.div

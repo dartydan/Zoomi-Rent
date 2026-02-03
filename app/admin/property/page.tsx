@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -28,15 +27,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus, DollarSign, TrendingUp, User } from "lucide-react";
-import type { Property, PropertyStatus, PropertyUnitType } from "@/lib/property";
+import type { Unit, MachineInfo, MachineStatus } from "@/lib/unit";
 
-type EditableField = "model" | "unitType" | "purchaseCost" | "notes" | "assignedUserId";
-
-const UNIT_TYPE_OPTIONS: { value: "" | PropertyUnitType; label: string }[] = [
-  { value: "", label: "—" },
-  { value: "Washer", label: "Washer" },
-  { value: "Dryer", label: "Dryer" },
-];
+type EditableField = "washer" | "dryer" | "unit";
+type MachineField = keyof MachineInfo;
 
 type AdminUser = {
   id: string;
@@ -62,15 +56,16 @@ function userDisplay(u: AdminUser) {
   return name || u.email || u.id;
 }
 
-/** Effective status for display: installed (green) is automatic when assigned + install date. */
 type DotStatus = "installed" | "available" | "needs_repair" | "no_longer_owned";
 
-function getDotStatus(item: Property, userById: (id: string) => AdminUser | undefined): DotStatus {
-  if (item.status === "no_longer_owned") return "no_longer_owned";
-  if (item.status === "needs_repair") return "needs_repair";
-  if (item.assignedUserId) {
-    const u = userById(item.assignedUserId);
-    if (u?.installDate) return "installed";
+function getUnitDotStatus(u: Unit, userById: (id: string) => AdminUser | undefined): DotStatus {
+  const washerStatus = u.washer.status;
+  const dryerStatus = u.dryer.status;
+  if (washerStatus === "no_longer_owned" || dryerStatus === "no_longer_owned") return "no_longer_owned";
+  if (washerStatus === "needs_repair" || dryerStatus === "needs_repair") return "needs_repair";
+  if (u.assignedUserId) {
+    const usr = userById(u.assignedUserId);
+    if (usr?.installDate) return "installed";
   }
   return "available";
 }
@@ -90,49 +85,32 @@ const DOT_LABELS: Record<DotStatus, string> = {
 };
 
 export default function PropertyPage() {
-  const [properties, setProperties] = useState<Property[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [infoPropertyId, setInfoPropertyId] = useState<string | null>(null);
-  const [infoEditingField, setInfoEditingField] = useState<EditableField | null>(null);
-  const [editingCell, setEditingCell] = useState<{ propertyId: string; field: EditableField } | null>(null);
-  const [formModel, setFormModel] = useState("");
-  const [formUnitType, setFormUnitType] = useState<string>("");
-  const [formPurchaseCost, setFormPurchaseCost] = useState("");
-  const [formAssignedUserId, setFormAssignedUserId] = useState<string>("");
-  const [formNotes, setFormNotes] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const inlineInputRef = useRef<HTMLInputElement | null>(null);
+  const [infoUnitId, setInfoUnitId] = useState<string | null>(null);
+  const [infoEditingField, setInfoEditingField] = useState<{
+    slot: EditableField;
+    field: MachineField | "acquisition" | "additional";
+  } | null>(null);
+  const inlineInputRef = useRef<HTMLInputElement>(null);
 
   const userById = (id: string) => users.find((u) => u.id === id);
-  const infoProperty = infoPropertyId ? properties.find((p) => p.id === infoPropertyId) : null;
+  const infoUnit = infoUnitId ? units.find((u) => u.id === infoUnitId) : null;
 
-  async function updateStatus(propertyId: string, status: PropertyStatus) {
-    try {
-      const res = await fetch(`/api/admin/property/${propertyId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) throw new Error("Failed to update status");
-      const updated = (await res.json()) as Property;
-      setProperties((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-    } catch {
-      setError("Failed to update status");
+  async function patchUnit(
+    unitId: string,
+    payload: {
+      assignedUserId?: string | null;
+      washer?: Partial<Unit["washer"]>;
+      dryer?: Partial<Unit["dryer"]>;
     }
-  }
-
-  async function patchProperty(
-    propertyId: string,
-    payload: { model?: string; unitType?: PropertyUnitType | null; purchaseCost?: number; notes?: string; assignedUserId?: string | null }
-  ): Promise<Property | null> {
+  ): Promise<Unit | null> {
     try {
-      const res = await fetch(`/api/admin/property/${propertyId}`, {
+      const res = await fetch(`/api/admin/units/${unitId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -141,13 +119,25 @@ export default function PropertyPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error ?? "Failed to update");
       }
-      const updated = (await res.json()) as Property;
-      setProperties((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      const updated = (await res.json()) as Unit;
+      setUnits((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
       return updated;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update");
       return null;
     }
+  }
+
+  async function updateMachineStatus(
+    unitId: string,
+    slot: "washer" | "dryer",
+    status: MachineStatus
+  ) {
+    const unit = units.find((u) => u.id === unitId);
+    if (!unit) return;
+    await patchUnit(unitId, {
+      [slot]: { ...unit[slot], status },
+    });
   }
 
   async function load() {
@@ -156,21 +146,21 @@ export default function PropertyPage() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
     try {
-      const [propRes, usersRes] = await Promise.all([
-        fetch("/api/admin/property", { signal: controller.signal }),
+      const [unitsRes, usersRes] = await Promise.all([
+        fetch("/api/admin/units", { signal: controller.signal }),
         fetch("/api/admin/users", { signal: controller.signal }),
       ]);
-      if (!propRes.ok) {
-        const msg = (await propRes.json().catch(() => ({})) as { error?: string }).error;
-        throw new Error(msg || "Failed to load properties");
+      if (!unitsRes.ok) {
+        const msg = (await unitsRes.json().catch(() => ({})) as { error?: string }).error;
+        throw new Error(msg || "Failed to load units");
       }
       if (!usersRes.ok) {
         const msg = (await usersRes.json().catch(() => ({})) as { error?: string }).error;
         throw new Error(msg || "Failed to load users");
       }
-      const propData = (await propRes.json()) as { properties: Property[] };
+      const unitsData = (await unitsRes.json()) as { units?: Unit[] };
       const usersData = (await usersRes.json()) as { users: AdminUser[] };
-      setProperties(propData.properties ?? []);
+      setUnits(unitsData.units ?? []);
       setUsers(usersData.users ?? []);
     } catch (e) {
       if ((e as { name?: string })?.name === "AbortError") {
@@ -188,103 +178,51 @@ export default function PropertyPage() {
     load();
   }, []);
 
-  function openCreate() {
-    setEditingId(null);
-    setFormModel("");
-    setFormUnitType("");
-    setFormPurchaseCost("");
-    setFormAssignedUserId("");
-    setFormNotes("");
-    setFormError(null);
-    setDialogOpen(true);
+  function totalRevenue(u: Unit) {
+    return (u.washer.revenueGenerated ?? 0) + (u.dryer.revenueGenerated ?? 0);
   }
 
-  function openEdit(item: Property) {
-    setEditingId(item.id);
-    setFormModel(item.model);
-    setFormUnitType(item.unitType ?? "");
-    setFormPurchaseCost(String(item.purchaseCost));
-    setFormAssignedUserId(item.assignedUserId ?? "");
-    setFormNotes(item.notes ?? "");
-    setFormError(null);
-    setDialogOpen(true);
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setFormError(null);
-    const model = formModel.trim();
-    const purchaseCost = parseFloat(formPurchaseCost);
-    const assignedUserId = formAssignedUserId.trim() || null;
-
-    if (!model) {
-      setFormError("Model is required.");
-      return;
-    }
-    if (Number.isNaN(purchaseCost) || purchaseCost < 0) {
-      setFormError("Purchase cost must be a non-negative number.");
-      return;
-    }
-
-    const unitType = formUnitType === "Washer" || formUnitType === "Dryer" ? formUnitType : undefined;
-    setSaving(true);
-    try {
-      if (editingId) {
-        const res = await fetch(`/api/admin/property/${editingId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model,
-            unitType: unitType ?? null,
-            purchaseCost,
-            notes: formNotes.trim() || undefined,
-            assignedUserId: assignedUserId ?? null,
-          }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error((data as { error?: string }).error ?? "Failed to update");
-        }
-        const updated = (await res.json()) as Property;
-        setProperties((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-      } else {
-        const res = await fetch("/api/admin/property", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model,
-            unitType: unitType ?? undefined,
-            purchaseCost,
-            notes: formNotes.trim() || undefined,
-          }),
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error((data as { error?: string }).error ?? "Failed to create");
-        }
-        const created = (await res.json()) as Property;
-        setProperties((prev) => [...prev, created]);
-      }
-      setDialogOpen(false);
-    } catch (e) {
-      setFormError(e instanceof Error ? e.message : "Something went wrong");
-    } finally {
-      setSaving(false);
-    }
+  function totalCost(u: Unit) {
+    return (u.washer.purchaseCost ?? 0) + (u.dryer.purchaseCost ?? 0) + (u.washer.repairCosts ?? 0) + (u.dryer.repairCosts ?? 0);
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Property</h1>
+          <h1 className="text-2xl font-bold text-foreground">Units</h1>
           <p className="text-sm text-muted-foreground">
-            Track assets: purchase cost and revenue generated
+            Track washer/dryer pairs: location, costs, and revenue
           </p>
         </div>
-        <Button type="button" onClick={openCreate}>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={creating}
+          onClick={async () => {
+            setCreating(true);
+            setError(null);
+            try {
+              const res = await fetch("/api/admin/units", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ assignedUserId: null }),
+              });
+              const data = (await res.json().catch(() => ({}))) as { error?: string };
+              if (res.ok) {
+                await load();
+              } else {
+                setError(data.error ?? "Failed to create unit");
+              }
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "Failed to create unit");
+            } finally {
+              setCreating(false);
+            }
+          }}
+        >
           <Plus className="h-4 w-4 mr-2" />
-          Add property
+          {creating ? "Creating…" : "Add unit"}
         </Button>
       </div>
 
@@ -296,9 +234,9 @@ export default function PropertyPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">All properties</CardTitle>
+          <CardTitle className="text-base">All units</CardTitle>
           <CardDescription>
-            Each item has a unique ID. Assign to a customer to compute revenue from Stripe.
+            Each unit is a washer/dryer pair. Assign to a customer or leave at warehouse.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -307,35 +245,30 @@ export default function PropertyPage() {
               Loading…
             </div>
           ) : (
-              <Table>
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="pl-6 w-10" aria-label="Status" />
                   <TableHead className="w-[180px]">ID</TableHead>
-                  <TableHead className="min-w-[140px]">Current Location</TableHead>
-                  <TableHead>Model</TableHead>
-                  <TableHead className="w-[100px]">Unit type</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead className="text-right">Purchase cost</TableHead>
-                  <TableHead className="text-right">Revenue generated</TableHead>
-                  <TableHead className="max-w-[200px]">Notes</TableHead>
+                  <TableHead className="min-w-[140px]">Location</TableHead>
+                  <TableHead>Washer</TableHead>
+                  <TableHead>Dryer</TableHead>
+                  <TableHead className="text-right">Total cost</TableHead>
+                  <TableHead className="text-right">Revenue</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {properties.length === 0 ? (
+                {units.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8 pl-6 pr-6">
-                      No properties yet. Add one to get started.
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8 pl-6 pr-6">
+                      No units yet. Add one to get started.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  properties.map((item) => {
-                    const assignedUser = item.assignedUserId ? userById(item.assignedUserId) : null;
-                    const dotStatus = getDotStatus(item, userById);
-                    const isEditing = (field: EditableField) =>
-                      editingCell?.propertyId === item.id && editingCell?.field === field;
+                  units.map((u) => {
+                    const dotStatus = getUnitDotStatus(u, userById);
                     return (
-                      <TableRow key={item.id} className="hover:bg-muted/50">
+                      <TableRow key={u.id} className="hover:bg-muted/50">
                         <TableCell className="pl-6">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -348,17 +281,30 @@ export default function PropertyPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start">
                               <DropdownMenuItem
-                                onClick={() => updateStatus(item.id, "available")}
+                                onClick={() => {
+                                  updateMachineStatus(u.id, "washer", "available");
+                                  updateMachineStatus(u.id, "dryer", "available");
+                                }}
                                 disabled={dotStatus === "installed"}
                               >
                                 <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-2" />
                                 Available to install
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateStatus(item.id, "needs_repair")}>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  updateMachineStatus(u.id, "washer", "needs_repair");
+                                  updateMachineStatus(u.id, "dryer", "needs_repair");
+                                }}
+                              >
                                 <span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />
                                 Needs repair
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => updateStatus(item.id, "no_longer_owned")}>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  updateMachineStatus(u.id, "washer", "no_longer_owned");
+                                  updateMachineStatus(u.id, "dryer", "no_longer_owned");
+                                }}
+                              >
                                 <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-2" />
                                 No longer owned
                               </DropdownMenuItem>
@@ -374,154 +320,46 @@ export default function PropertyPage() {
                         <TableCell className="font-mono text-xs text-muted-foreground">
                           <button
                             type="button"
-                            onClick={() => { setEditingCell(null); setInfoPropertyId(item.id); }}
+                            onClick={() => setInfoUnitId(u.id)}
                             className="text-left text-primary hover:underline focus:outline-none focus:underline"
                           >
-                            {item.id}
+                            {u.id}
                           </button>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate" title={(() => {
-                          const u = item.assignedUserId ? userById(item.assignedUserId) : undefined;
-                          const installed = u?.installDate;
-                          if (!installed) return "At Warehouse";
-                          const addr = u?.installAddress ?? u?.address ?? null;
-                          return addr || "—";
-                        })()}>
-                          {(() => {
-                            const u = item.assignedUserId ? userById(item.assignedUserId) : undefined;
-                            const installed = u?.installDate;
-                            if (!installed) return "At Warehouse";
-                            const addr = u?.installAddress ?? u?.address ?? null;
-                            return addr || "—";
-                          })()}
+                        <TableCell className="text-sm">
+                          <CustomSelect
+                            options={[
+                              { value: "", label: "Warehouse" },
+                              ...users.map((usr) => ({ value: usr.id, label: userDisplay(usr) })),
+                            ]}
+                            value={u.assignedUserId ?? ""}
+                            onChange={async (value) => {
+                              await patchUnit(u.id, {
+                                assignedUserId: value.trim() || null,
+                              });
+                            }}
+                            placeholder="Location"
+                            icon={<User className="h-4 w-4" />}
+                          />
                         </TableCell>
-                        <TableCell className="font-medium">
-                          {isEditing("model") ? (
-                            <Input
-                              ref={inlineInputRef}
-                              className="h-8 w-full"
-                              defaultValue={item.model}
-                              onBlur={(e) => {
-                                const v = e.target.value.trim();
-                                if (v) patchProperty(item.id, { model: v });
-                                setEditingCell(null);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  const v = (e.target as HTMLInputElement).value.trim();
-                                  if (v) patchProperty(item.id, { model: v });
-                                  setEditingCell(null);
-                                }
-                                if (e.key === "Escape") setEditingCell(null);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              autoFocus
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              className="text-left hover:bg-muted rounded px-1 py-0.5 -mx-1 w-full"
-                              onClick={() => setEditingCell({ propertyId: item.id, field: "model" })}
-                            >
-                              {item.model}
-                            </button>
-                          )}
+                        <TableCell className="text-sm max-w-[160px]">
+                          <span className="truncate block" title={[u.washer.brand, u.washer.model].filter(Boolean).join(" ") || "—"}>
+                            {[u.washer.brand, u.washer.model].filter(Boolean).join(" ") || "—"}
+                          </span>
                         </TableCell>
-                        <TableCell>
-                          <button
-                            type="button"
-                            onClick={() => { setEditingCell(null); setInfoPropertyId(item.id); }}
-                            className="text-left hover:bg-muted rounded px-1 py-0.5 -mx-1 w-full min-w-[90px] text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          >
-                            {item.unitType ?? "—"}
-                          </button>
-                        </TableCell>
-                        <TableCell>
-                          <button
-                            type="button"
-                            onClick={() => { setEditingCell(null); setInfoPropertyId(item.id); }}
-                            className="text-left hover:bg-muted rounded px-1 py-0.5 -mx-1 w-full min-w-[120px] text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          >
-                            {(() => {
-                              const u = item.assignedUserId ? userById(item.assignedUserId) : undefined;
-                              return u ? userDisplay(u) : (item.assignedUserId ? item.assignedUserId : "No customer");
-                            })()}
-                          </button>
+                        <TableCell className="text-sm max-w-[160px]">
+                          <span className="truncate block" title={[u.dryer.brand, u.dryer.model].filter(Boolean).join(" ") || "—"}>
+                            {[u.dryer.brand, u.dryer.model].filter(Boolean).join(" ") || "—"}
+                          </span>
                         </TableCell>
                         <TableCell className="text-right">
-                          {isEditing("purchaseCost") ? (
-                            <Input
-                              ref={inlineInputRef}
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              className="h-8 w-24 ml-auto"
-                              defaultValue={item.purchaseCost}
-                              onBlur={(e) => {
-                                const n = parseFloat(e.target.value);
-                                if (!Number.isNaN(n) && n >= 0) patchProperty(item.id, { purchaseCost: n });
-                                setEditingCell(null);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  const n = parseFloat((e.target as HTMLInputElement).value);
-                                  if (!Number.isNaN(n) && n >= 0) patchProperty(item.id, { purchaseCost: n });
-                                  setEditingCell(null);
-                                }
-                                if (e.key === "Escape") setEditingCell(null);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              autoFocus
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              className="text-right hover:bg-muted rounded px-1 py-0.5 -mx-1 ml-auto flex items-center justify-end gap-1 w-full"
-                              onClick={() => setEditingCell({ propertyId: item.id, field: "purchaseCost" })}
-                            >
-                              <DollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
-                              {formatCurrency(item.purchaseCost)}
-                            </button>
-                          )}
+                          {formatCurrency(totalCost(u))}
                         </TableCell>
                         <TableCell className="text-right">
                           <span className="flex items-center justify-end gap-1">
                             <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                            {formatCurrency(item.revenueGenerated)}
+                            {formatCurrency(totalRevenue(u))}
                           </span>
-                        </TableCell>
-                        <TableCell className="max-w-[200px] text-muted-foreground text-sm">
-                          {isEditing("notes") ? (
-                            <Input
-                              ref={inlineInputRef}
-                              className="h-8 w-full"
-                              defaultValue={item.notes ?? ""}
-                              placeholder="Notes"
-                              onBlur={(e) => {
-                                patchProperty(item.id, { notes: e.target.value.trim() || undefined });
-                                setEditingCell(null);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  patchProperty(item.id, {
-                                    notes: (e.target as HTMLInputElement).value.trim() || undefined,
-                                  });
-                                  setEditingCell(null);
-                                }
-                                if (e.key === "Escape") setEditingCell(null);
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                              autoFocus
-                            />
-                          ) : (
-                            <button
-                              type="button"
-                              className="text-left truncate max-w-full hover:bg-muted rounded px-1 py-0.5 -mx-1 block w-full"
-                              onClick={() => setEditingCell({ propertyId: item.id, field: "notes" })}
-                            >
-                              {item.notes ?? "—"}
-                            </button>
-                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -533,302 +371,143 @@ export default function PropertyPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Edit property" : "Add property"}</DialogTitle>
-            <DialogDescription>
-              {editingId
-                ? "Update model, purchase cost, assign to customer, or revenue (when not assigned)."
-                : "A unique ID will be generated when you create the item."}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {formError && (
-              <p className="text-sm text-destructive" role="alert">
-                {formError}
-              </p>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="prop-model">Model</Label>
-              <Input
-                id="prop-model"
-                value={formModel}
-                onChange={(e) => setFormModel(e.target.value)}
-                placeholder="e.g. Unit 101"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Unit type</Label>
-              <CustomSelect
-                options={UNIT_TYPE_OPTIONS}
-                value={formUnitType}
-                onChange={setFormUnitType}
-                placeholder="Washer or Dryer"
-              />
-            </div>
-            {editingId && (
-              <div className="space-y-2">
-                <Label>Assign to customer</Label>
-                <CustomSelect
-                  options={[
-                    { value: "", label: "No customer" },
-                    ...users.map((u) => ({ value: u.id, label: userDisplay(u) })),
-                  ]}
-                  value={formAssignedUserId}
-                  onChange={setFormAssignedUserId}
-                  placeholder="Select customer"
-                  icon={<User className="h-4 w-4" />}
-                />
-                <p className="text-xs text-muted-foreground">
-                  When assigned, revenue is computed from Stripe (install date to subscription end).
-                </p>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="prop-cost">Purchase cost ($)</Label>
-              <Input
-                id="prop-cost"
-                type="number"
-                min={0}
-                step={0.01}
-                value={formPurchaseCost}
-                onChange={(e) => setFormPurchaseCost(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            {editingId && formAssignedUserId && (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  Revenue is computed from Stripe (install date to subscription end). When you unassign, that revenue is added to the property total and continues when you assign again.
-                </p>
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="prop-notes">Notes (optional)</Label>
-              <Input
-                id="prop-notes"
-                value={formNotes}
-                onChange={(e) => setFormNotes(e.target.value)}
-                placeholder="Optional notes"
-              />
-            </div>
-            <div className="flex gap-2 justify-end pt-2">
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : editingId ? "Save" : "Create"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
       <Dialog
-        open={!!infoPropertyId}
+        open={!!infoUnitId}
         onOpenChange={(open) => {
           if (!open) {
-            setInfoPropertyId(null);
+            setInfoUnitId(null);
             setInfoEditingField(null);
           }
         }}
       >
-        <DialogContent className="max-w-md">
-          {infoProperty && (
+        <DialogContent className="max-w-lg">
+          {infoUnit && (
             <>
               <DialogHeader>
-                <DialogTitle>Property info</DialogTitle>
-                <DialogDescription className="font-mono text-xs break-all">{infoProperty.id}</DialogDescription>
+                <DialogTitle>Unit details</DialogTitle>
+                <DialogDescription className="font-mono text-xs break-all">{infoUnit.id}</DialogDescription>
               </DialogHeader>
-              <Card>
-                <CardContent className="pt-6 space-y-4">
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Status</p>
-                    <span className="flex items-center gap-2">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            title={`${DOT_LABELS[getDotStatus(infoProperty, userById)]} (click to change)`}
-                            aria-label={`Status: ${DOT_LABELS[getDotStatus(infoProperty, userById)]}. Click to change.`}
-                            className={`h-2.5 w-2.5 shrink-0 rounded-full border border-border ${DOT_COLORS[getDotStatus(infoProperty, userById)]} focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer`}
-                          />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
-                          <DropdownMenuItem
-                            onClick={() => updateStatus(infoProperty.id, "available")}
-                            disabled={getDotStatus(infoProperty, userById) === "installed"}
-                          >
-                            <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-2" />
-                            Available to install
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => updateStatus(infoProperty.id, "needs_repair")}>
-                            <span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />
-                            Needs repair
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => updateStatus(infoProperty.id, "no_longer_owned")}>
-                            <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-2" />
-                            No longer owned
-                          </DropdownMenuItem>
-                          {getDotStatus(infoProperty, userById) === "installed" && (
-                            <DropdownMenuItem disabled>
-                              <span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-2" />
-                              Installed (automatic when assigned + install date)
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <span className="text-sm">{DOT_LABELS[getDotStatus(infoProperty, userById)]}</span>
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Model</p>
-                    {infoEditingField === "model" ? (
-                      <Input
-                        ref={inlineInputRef}
-                        className="h-8"
-                        defaultValue={infoProperty.model}
-                        onBlur={(e) => {
-                          const v = e.target.value.trim();
-                          if (v) patchProperty(infoProperty.id, { model: v });
-                          setInfoEditingField(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            const v = (e.target as HTMLInputElement).value.trim();
-                            if (v) patchProperty(infoProperty.id, { model: v });
-                            setInfoEditingField(null);
-                          }
-                          if (e.key === "Escape") setInfoEditingField(null);
-                        }}
-                        autoFocus
-                      />
-                    ) : (
-                      <button
-                        type="button"
-                        className="text-sm text-left hover:bg-muted rounded px-2 py-1 -mx-2"
-                        onClick={() => setInfoEditingField("model")}
-                      >
-                        {infoProperty.model}
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Unit type</p>
-                    <CustomSelect
-                      options={UNIT_TYPE_OPTIONS}
-                      value={infoProperty.unitType ?? ""}
-                      onChange={async (value) => {
-                        const v = value === "Washer" || value === "Dryer" ? value : null;
-                        await patchProperty(infoProperty.id, { unitType: v });
-                      }}
-                      placeholder="Washer or Dryer"
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Location</p>
+                  <CustomSelect
+                    options={[
+                      { value: "", label: "Warehouse" },
+                      ...users.map((usr) => ({ value: usr.id, label: userDisplay(usr) })),
+                    ]}
+                    value={infoUnit.assignedUserId ?? ""}
+                    onChange={async (value) => {
+                      await patchUnit(infoUnit.id, {
+                        assignedUserId: value.trim() || null,
+                      });
+                      await load();
+                    }}
+                    placeholder="Location"
+                    icon={<User className="h-4 w-4" />}
+                  />
+                </div>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Unit costs</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0 space-y-2">
+                    <EditableUnitCostField
+                      unit={infoUnit}
+                      field="acquisition"
+                      formatCurrency={formatCurrency}
+                      patchUnit={patchUnit}
+                      infoEditingField={infoEditingField}
+                      setInfoEditingField={setInfoEditingField}
+                      inlineInputRef={inlineInputRef}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Customer</p>
-                    <CustomSelect
-                      options={[
-                        { value: "", label: "No customer" },
-                        ...users.map((u) => ({ value: u.id, label: userDisplay(u) })),
-                      ]}
-                      value={infoProperty.assignedUserId ?? ""}
-                      onChange={async (value) => {
-                        await patchProperty(infoProperty.id, {
-                          assignedUserId: value.trim() || null,
-                        });
-                      }}
-                      placeholder="Select customer"
-                      icon={<User className="h-4 w-4" />}
+                    <EditableUnitCostField
+                      unit={infoUnit}
+                      field="additional"
+                      formatCurrency={formatCurrency}
+                      patchUnit={patchUnit}
+                      infoEditingField={infoEditingField}
+                      setInfoEditingField={setInfoEditingField}
+                      inlineInputRef={inlineInputRef}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Purchase cost</p>
-                    {infoEditingField === "purchaseCost" ? (
-                      <Input
-                        ref={inlineInputRef}
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        className="h-8"
-                        defaultValue={infoProperty.purchaseCost}
-                        onBlur={(e) => {
-                          const n = parseFloat(e.target.value);
-                          if (!Number.isNaN(n) && n >= 0) patchProperty(infoProperty.id, { purchaseCost: n });
-                          setInfoEditingField(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            const n = parseFloat((e.target as HTMLInputElement).value);
-                            if (!Number.isNaN(n) && n >= 0) patchProperty(infoProperty.id, { purchaseCost: n });
-                            setInfoEditingField(null);
-                          }
-                          if (e.key === "Escape") setInfoEditingField(null);
-                        }}
-                        autoFocus
+                    <EditableMachineField
+                      unit={infoUnit}
+                      slot="washer"
+                      field="acquisitionSource"
+                      formatCurrency={formatCurrency}
+                      patchUnit={patchUnit}
+                      infoEditingField={infoEditingField}
+                      setInfoEditingField={setInfoEditingField}
+                      inlineInputRef={inlineInputRef}
+                    />
+                  </CardContent>
+                </Card>
+                <div className="grid grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Washer</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0 space-y-2">
+                      <EditableMachineField
+                        unit={infoUnit}
+                        slot="washer"
+                        field="brand"
+                        formatCurrency={formatCurrency}
+                        patchUnit={patchUnit}
+                        infoEditingField={infoEditingField}
+                        setInfoEditingField={setInfoEditingField}
+                        inlineInputRef={inlineInputRef}
                       />
-                    ) : (
-                      <button
-                        type="button"
-                        className="text-sm text-left hover:bg-muted rounded px-2 py-1 -mx-2"
-                        onClick={() => setInfoEditingField("purchaseCost")}
-                      >
-                        {formatCurrency(infoProperty.purchaseCost)}
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Revenue generated</p>
-                    <p className="text-sm">{formatCurrency(infoProperty.revenueGenerated)}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Notes</p>
-                    {infoEditingField === "notes" ? (
-                      <Input
-                        ref={inlineInputRef}
-                        className="h-8"
-                        defaultValue={infoProperty.notes ?? ""}
-                        placeholder="Optional notes"
-                        onBlur={(e) => {
-                          patchProperty(infoProperty.id, { notes: e.target.value.trim() || undefined });
-                          setInfoEditingField(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            patchProperty(infoProperty.id, {
-                              notes: (e.target as HTMLInputElement).value.trim() || undefined,
-                            });
-                            setInfoEditingField(null);
-                          }
-                          if (e.key === "Escape") setInfoEditingField(null);
-                        }}
-                        autoFocus
+                      <EditableMachineField
+                        unit={infoUnit}
+                        slot="washer"
+                        field="model"
+                        formatCurrency={formatCurrency}
+                        patchUnit={patchUnit}
+                        infoEditingField={infoEditingField}
+                        setInfoEditingField={setInfoEditingField}
+                        inlineInputRef={inlineInputRef}
                       />
-                    ) : (
-                      <button
-                        type="button"
-                        className="text-sm text-left hover:bg-muted rounded px-2 py-1 -mx-2 text-muted-foreground w-full"
-                        onClick={() => setInfoEditingField("notes")}
-                      >
-                        {infoProperty.notes || "—"}
-                      </button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-              <div className="flex items-center justify-between gap-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-muted-foreground"
-                  onClick={() => updateStatus(infoProperty.id, "needs_repair")}
-                >
-                  Mark as needs repair
-                </Button>
-                <Button type="button" variant="outline" onClick={() => { setInfoPropertyId(null); setInfoEditingField(null); }}>
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Revenue</p>
+                        <p className="text-sm">{formatCurrency(infoUnit.washer.revenueGenerated ?? 0)}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Dryer</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0 space-y-2">
+                      <EditableMachineField
+                        unit={infoUnit}
+                        slot="dryer"
+                        field="brand"
+                        formatCurrency={formatCurrency}
+                        patchUnit={patchUnit}
+                        infoEditingField={infoEditingField}
+                        setInfoEditingField={setInfoEditingField}
+                        inlineInputRef={inlineInputRef}
+                      />
+                      <EditableMachineField
+                        unit={infoUnit}
+                        slot="dryer"
+                        field="model"
+                        formatCurrency={formatCurrency}
+                        patchUnit={patchUnit}
+                        infoEditingField={infoEditingField}
+                        setInfoEditingField={setInfoEditingField}
+                        inlineInputRef={inlineInputRef}
+                      />
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">Revenue</p>
+                        <p className="text-sm">{formatCurrency(infoUnit.dryer.revenueGenerated ?? 0)}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={() => { setInfoUnitId(null); setInfoEditingField(null); }}>
                   Close
                 </Button>
               </div>
@@ -836,6 +515,150 @@ export default function PropertyPage() {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function EditableUnitCostField({
+  unit,
+  field,
+  formatCurrency,
+  patchUnit,
+  infoEditingField,
+  setInfoEditingField,
+  inlineInputRef,
+}: {
+  unit: Unit;
+  field: "acquisition" | "additional";
+  formatCurrency: (n: number) => string;
+  patchUnit: (id: string, p: { washer?: Partial<MachineInfo>; dryer?: Partial<MachineInfo> }) => Promise<Unit | null>;
+  infoEditingField: { slot: EditableField; field: MachineField | "acquisition" | "additional" } | null;
+  setInfoEditingField: (f: { slot: EditableField; field: MachineField | "acquisition" | "additional" } | null) => void;
+  inlineInputRef: React.RefObject<HTMLInputElement>;
+}) {
+  const value = field === "acquisition" ? (unit.washer.purchaseCost ?? 0) : (unit.washer.repairCosts ?? 0);
+  const isEditing = infoEditingField?.slot === "unit" && infoEditingField?.field === field;
+
+  const handleSave = (n: number) => {
+    if (!Number.isNaN(n) && n >= 0) {
+      if (field === "acquisition") {
+        patchUnit(unit.id, { washer: { purchaseCost: n }, dryer: { purchaseCost: 0 } });
+      } else {
+        patchUnit(unit.id, { washer: { repairCosts: n }, dryer: { repairCosts: 0 } });
+      }
+    }
+    setInfoEditingField(null);
+  };
+
+  return (
+    <div>
+      <p className="text-xs font-medium text-muted-foreground">
+        {field === "acquisition" ? "Acquisition cost" : "Additional costs"}
+      </p>
+      {isEditing ? (
+        <Input
+          ref={inlineInputRef}
+          type="number"
+          min={0}
+          step={0.01}
+          className="h-8 mt-0.5"
+          defaultValue={value}
+          onBlur={(e) => handleSave(parseFloat(e.target.value))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSave(parseFloat((e.target as HTMLInputElement).value));
+            if (e.key === "Escape") setInfoEditingField(null);
+          }}
+          autoFocus
+        />
+      ) : (
+        <button
+          type="button"
+          className="text-sm text-left hover:bg-muted rounded px-2 py-1 -mx-2 block w-full"
+          onClick={() => setInfoEditingField({ slot: "unit", field })}
+        >
+          {formatCurrency(value)}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function EditableMachineField({
+  unit,
+  slot,
+  field,
+  formatCurrency,
+  patchUnit,
+  infoEditingField,
+  setInfoEditingField,
+  inlineInputRef,
+  format,
+}: {
+  unit: Unit;
+  slot: "washer" | "dryer";
+  field: MachineField;
+  formatCurrency: (n: number) => string;
+  patchUnit: (id: string, p: { washer?: Partial<MachineInfo>; dryer?: Partial<MachineInfo> }) => Promise<Unit | null>;
+  infoEditingField: { slot: EditableField; field: MachineField | "acquisition" | "additional" } | null;
+  setInfoEditingField: (f: { slot: EditableField; field: MachineField | "acquisition" | "additional" } | null) => void;
+  inlineInputRef: React.RefObject<HTMLInputElement>;
+  format?: "currency";
+}) {
+  const machine = unit[slot];
+  const value = machine[field];
+  const isEditing = infoEditingField?.slot === slot && infoEditingField?.field === field;
+
+  const displayValue =
+    field === "purchaseCost" || field === "repairCosts"
+      ? formatCurrency((value as number) ?? 0)
+      : (value as string | undefined) ?? "—";
+
+  const handleSave = (v: string | number) => {
+    if (field === "purchaseCost" || field === "repairCosts") {
+      const n = typeof v === "string" ? parseFloat(v) : v;
+      if (!Number.isNaN(n) && n >= 0) {
+        patchUnit(unit.id, { [slot]: { [field]: n } });
+      }
+    } else {
+      const s = typeof v === "string" ? v.trim() : String(v).trim();
+      patchUnit(unit.id, { [slot]: { [field]: s || undefined } });
+    }
+    setInfoEditingField(null);
+  };
+
+  return (
+    <div>
+      <p className="text-xs font-medium text-muted-foreground capitalize">{field.replace(/([A-Z])/g, " $1").trim()}</p>
+      {isEditing ? (
+        <Input
+          ref={inlineInputRef}
+          type={format === "currency" ? "number" : "text"}
+          min={format === "currency" ? 0 : undefined}
+          step={format === "currency" ? 0.01 : undefined}
+          className="h-8 mt-0.5"
+          defaultValue={field === "purchaseCost" || field === "repairCosts" ? (value as number) ?? 0 : (value as string) ?? ""}
+          onBlur={(e) => {
+            if (format === "currency") handleSave(parseFloat(e.target.value));
+            else handleSave(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              if (format === "currency") handleSave(parseFloat((e.target as HTMLInputElement).value));
+              else handleSave((e.target as HTMLInputElement).value);
+            }
+            if (e.key === "Escape") setInfoEditingField(null);
+          }}
+          autoFocus
+        />
+      ) : (
+        <button
+          type="button"
+          className="text-sm text-left hover:bg-muted rounded px-2 py-1 -mx-2 block w-full"
+          onClick={() => setInfoEditingField({ slot, field })}
+        >
+          {displayValue}
+        </button>
+      )}
     </div>
   );
 }

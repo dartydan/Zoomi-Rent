@@ -44,6 +44,7 @@ export async function GET() {
         }
 
         let hasDefaultPaymentMethod = false;
+        let stripeCustomer: Stripe.Customer | null = null;
         if (stripe && stripeCustomerId) {
           try {
             const timeoutMs = 2000;
@@ -54,8 +55,9 @@ export async function GET() {
               ),
             ]);
             if (!customer.deleted) {
-              const pm = (customer as Stripe.Customer).invoice_settings?.default_payment_method;
-              const legacy = (customer as Stripe.Customer).default_source;
+              stripeCustomer = customer as Stripe.Customer;
+              const pm = stripeCustomer.invoice_settings?.default_payment_method;
+              const legacy = stripeCustomer.default_source;
               hasDefaultPaymentMethod = !!(pm ?? legacy);
             }
           } catch {
@@ -63,18 +65,28 @@ export async function GET() {
           }
         }
 
+        const fromStripe = stripeCustomer;
+        const nameParts = fromStripe?.name?.trim().split(/\s+/) ?? [];
+        const stripeFirstName = nameParts.length > 0 ? nameParts[0] : null;
+        const stripeLastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : null;
+        const addr = fromStripe?.address;
+        const stripeAddress =
+          addr?.line1 || addr?.city || addr?.state || addr?.postal_code
+            ? [addr.line1, addr.city, addr.state, addr.postal_code].filter(Boolean).join(", ")
+            : null;
+
         return {
           id: u.id,
-          email: u.emailAddresses[0]?.emailAddress ?? null,
-          firstName: u.firstName,
-          lastName: u.lastName,
+          email: fromStripe?.email ?? u.emailAddresses[0]?.emailAddress ?? null,
+          firstName: stripeFirstName ?? u.firstName,
+          lastName: stripeLastName ?? u.lastName,
           createdAt: u.createdAt,
           stripeCustomerId,
           hasDefaultPaymentMethod,
           installDate: install.installDate ?? null,
           installAddress: install.installAddress ?? null,
-          phone: (customerProfile.phone as string) ?? null,
-          address: (customerProfile.address as string) ?? null,
+          phone: fromStripe?.phone ?? (customerProfile.phone as string) ?? null,
+          address: stripeAddress ?? (customerProfile.address as string) ?? null,
           selectedPlan: (customerProfile.selectedPlan as string) ?? null,
         };
       })

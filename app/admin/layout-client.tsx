@@ -39,7 +39,7 @@ export function AdminLayoutClient({
               size="icon"
               className="relative h-9 w-9 shrink-0 border border-transparent hover:border-border rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={() => setTheme(isDark ? "light" : "dark")}
-              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label="Toggle theme"
             >
               <Sun className="h-4 w-4 scale-0 transition-all dark:scale-100" />
               <Moon className="absolute h-4 w-4 scale-100 transition-all dark:scale-0" />

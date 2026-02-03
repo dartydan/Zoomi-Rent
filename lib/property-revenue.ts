@@ -23,7 +23,10 @@ export async function computeRevenueForAssignedUser(userId: string): Promise<num
     const user = await clerkClient.users.getUser(userId);
     const stripeCustomerId = user.publicMetadata?.stripeCustomerId as string | undefined;
     const install = (user.publicMetadata?.[INSTALL_METADATA_KEY] ?? {}) as InstallInfo;
-    const installDateStr = install.installDate;
+    const installDateStr =
+      Array.isArray(install.installs) && install.installs.length > 0
+        ? install.installs[0].installDate
+        : install.installDate;
 
     if (!stripeCustomerId || !installDateStr) return 0;
 

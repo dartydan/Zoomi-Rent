@@ -169,10 +169,18 @@ function CTASection() {
   );
 }
 
+const FOOTER_LOCATIONS = [
+  "Muncie", "Anderson", "Yorktown", "New Castle", "Richmond", "Marion",
+  "Hartford City", "Portland", "Winchester", "Alexandria", "Pendleton",
+  "Greenfield", "Carmel", "Fishers", "Noblesville", "Westfield",
+  "Indianapolis", "Kokomo", "Tipton", "Frankfort", "Bluffton", "Decatur",
+  "Fort Wayne", "Lafayette",
+];
+
 function MarketingFooter() {
   return (
     <footer className="border-t border-border px-4 py-8" role="contentinfo">
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-center sm:text-left">
             <p className="text-lg font-semibold text-foreground">Zoomi Rentals</p>
@@ -182,6 +190,9 @@ function MarketingFooter() {
             <Link href="/login">Customer Login</Link>
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground text-center sm:text-left">
+          Serving East Central Indiana: {FOOTER_LOCATIONS.join(", ")}
+        </p>
       </div>
     </footer>
   );

@@ -116,15 +116,15 @@ export default function AdminPage() {
     }
   };
 
-  // Inventory from property API (optional - show 0 if no API)
+  // Inventory from units API
   const [inventory, setInventory] = useState<{ total: number; assigned: number }>({ total: 0, assigned: 0 });
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/admin/property")
-      .then((res) => res.ok ? res.json() : { properties: [] })
-      .then((data: { properties?: Array<{ assignedUserId?: string | null }> }) => {
-        const props = data.properties ?? [];
-        if (!cancelled) setInventory({ total: props.length, assigned: props.filter((p) => p.assignedUserId).length });
+    fetch("/api/admin/units")
+      .then((res) => res.ok ? res.json() : { units: [] })
+      .then((data: { units?: Array<{ assignedUserId?: string | null }> }) => {
+        const units = data.units ?? [];
+        if (!cancelled) setInventory({ total: units.length, assigned: units.filter((u) => u.assignedUserId).length });
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -133,22 +133,22 @@ export default function AdminPage() {
   const unitsRented = inventory.assigned;
   const unitsAvailable = Math.max(0, inventory.total - inventory.assigned);
   
-  // Revenue from properties (sum of revenueGenerated)
-  const [revenueTotal, setRevenueTotal] = useState<number>(0);
+  // Revenue from /api/admin/revenue (current + forecasted, avoids double-counting when multiple units share a customer)
+  const [currentRevenue, setCurrentRevenue] = useState<number>(0);
+  const [forecastedRevenue, setForecastedRevenue] = useState<number>(0);
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/admin/property")
-      .then((res) => res.ok ? res.json() : { properties: [] })
-      .then((data: { properties?: Array<{ revenueGenerated?: number }> }) => {
-        const props = data.properties ?? [];
-        const sum = props.reduce((s, p) => s + (p.revenueGenerated ?? 0), 0);
-        if (!cancelled) setRevenueTotal(sum);
+    fetch("/api/admin/revenue")
+      .then((res) => res.ok ? res.json() : { currentRevenue: 0, forecastedRevenue: 0 })
+      .then((data: { currentRevenue?: number; forecastedRevenue?: number }) => {
+        if (!cancelled) {
+          setCurrentRevenue(data.currentRevenue ?? 0);
+          setForecastedRevenue(data.forecastedRevenue ?? data.currentRevenue ?? 0);
+        }
       })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
-  const currentRevenue = revenueTotal;
-  const forecastedRevenue = revenueTotal;
 
   // Fetch customers when add dialog opens
   useEffect(() => {
@@ -320,9 +320,9 @@ export default function AdminPage() {
               <p className="text-sm font-medium text-muted-foreground mb-2">
                 Current Revenue
               </p>
-              <p className="text-3xl font-bold text-foreground">${currentRevenue.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-foreground">${currentRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               <p className="text-sm text-muted-foreground mt-1">
-                For this {timeframe}
+                Total to date
               </p>
             </div>
             <div>
@@ -330,10 +330,10 @@ export default function AdminPage() {
                 Forecasted Revenue
               </p>
               <p className="text-3xl font-bold text-green-600 dark:text-green-500">
-                ${forecastedRevenue.toLocaleString()}
+                ${forecastedRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                Expected by end of {timeframe}
+                Current plus next scheduled payments
               </p>
             </div>
           </div>

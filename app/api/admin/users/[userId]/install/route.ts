@@ -19,19 +19,33 @@ function getStripe(): Stripe | null {
   return new Stripe(key);
 }
 
-/** Sum of all successful charges for the customer (lifetime value in dollars). */
+/** Sum of all successful charges for the customer (lifetime value in dollars). Net of refunds and discounts. */
 async function computeLifetimeValue(stripeCustomerId: string): Promise<number> {
   const stripe = getStripe();
   if (!stripe) return 0;
   try {
-    // Fetch all successful charges (includes subscriptions, one-time payments, etc.)
-    const charges = await stripe.charges.list({
-      customer: stripeCustomerId,
-      limit: 100,
-    });
-    const totalCents = charges.data
-      .filter((charge) => charge.status === "succeeded" && !charge.refunded)
-      .reduce((sum, charge) => sum + charge.amount, 0);
+    let totalCents = 0;
+    let hasMore = true;
+    let startingAfter: string | undefined;
+    while (hasMore) {
+      const charges = await stripe.charges.list({
+        customer: stripeCustomerId,
+        limit: 100,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+      for (const charge of charges.data) {
+        if (charge.status === "succeeded") {
+          const net = charge.amount - (charge.amount_refunded ?? 0);
+          if (net > 0) totalCents += net;
+        }
+      }
+      hasMore = charges.has_more;
+      if (charges.data.length > 0) {
+        startingAfter = charges.data[charges.data.length - 1].id;
+      } else {
+        hasMore = false;
+      }
+    }
     return totalCents / 100;
   } catch {
     return 0;
@@ -66,20 +80,58 @@ export async function GET(
     const install = (user.publicMetadata?.[INSTALL_METADATA_KEY] ?? {}) as InstallInfo;
     const customerProfile = user.publicMetadata?.customerProfile as Record<string, unknown> | undefined;
     const clerkEmail = user.emailAddresses?.[0]?.emailAddress ?? undefined;
-    const mergedProfile: Record<string, unknown> = {
-      ...(customerProfile ?? {}),
-      email: (customerProfile?.email as string) || clerkEmail || undefined,
-      firstName: ((customerProfile?.firstName as string) || user.firstName) ?? undefined,
-      lastName: ((customerProfile?.lastName as string) || user.lastName) ?? undefined,
-    };
-    const profileAddress = (mergedProfile.address as string) ?? undefined;
-    const installAddress = install.installAddress ?? profileAddress;
-    let stripeCustomerId = (user.publicMetadata?.stripeCustomerId as string | undefined)?.trim() || null;
     const stripe = getStripe();
+    let stripeCustomerId = (user.publicMetadata?.stripeCustomerId as string | undefined)?.trim() || null;
     if (stripe && !stripeCustomerId && clerkEmail) {
       const list = await stripe.customers.list({ email: clerkEmail, limit: 1 });
       if (list.data.length > 0 && !list.data[0].deleted) stripeCustomerId = list.data[0].id;
     }
+
+    let mergedProfile: Record<string, unknown>;
+    if (stripe && stripeCustomerId) {
+      try {
+        const sc = await stripe.customers.retrieve(stripeCustomerId);
+        if (sc.deleted) throw new Error("deleted");
+        const c = sc as Stripe.Customer;
+        const nameParts = (c.name ?? "").trim().split(/\s+/);
+        const firstName = nameParts.length > 0 ? nameParts[0] : undefined;
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined;
+        const addr = c.address;
+        const address =
+          addr?.line1 || addr?.city || addr?.state || addr?.postal_code
+            ? [addr.line1, addr.city, addr.state, addr.postal_code].filter(Boolean).join(", ")
+            : undefined;
+        mergedProfile = {
+          ...(customerProfile ?? {}),
+          firstName,
+          lastName,
+          email: c.email ?? undefined,
+          phone: c.phone ?? undefined,
+          address,
+          street: addr?.line1 ?? undefined,
+          city: addr?.city ?? undefined,
+          state: addr?.state ?? undefined,
+          zip: addr?.postal_code ?? undefined,
+        };
+      } catch {
+        mergedProfile = {
+          ...(customerProfile ?? {}),
+          email: (customerProfile?.email as string) || clerkEmail || undefined,
+          firstName: ((customerProfile?.firstName as string) || user.firstName) ?? undefined,
+          lastName: ((customerProfile?.lastName as string) || user.lastName) ?? undefined,
+        };
+      }
+    } else {
+      mergedProfile = {
+        ...(customerProfile ?? {}),
+        email: (customerProfile?.email as string) || clerkEmail || undefined,
+        firstName: ((customerProfile?.firstName as string) || user.firstName) ?? undefined,
+        lastName: ((customerProfile?.lastName as string) || user.lastName) ?? undefined,
+      };
+    }
+
+    const profileAddress = (mergedProfile.address as string) ?? undefined;
+    const installAddress = install.installAddress ?? profileAddress;
     const lifetimeValue =
       stripeCustomerId != null ? await computeLifetimeValue(stripeCustomerId) : 0;
     const installs: InstallRecord[] =

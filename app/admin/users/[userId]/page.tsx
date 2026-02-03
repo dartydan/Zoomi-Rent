@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink, Wrench, CreditCard, CalendarClock, Plus, LogIn } from "lucide-react";
 import type { InstallInfo, InstallRecord } from "@/lib/install";
-import type { Property } from "@/lib/property";
+import type { Unit } from "@/lib/unit";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import {
   Dialog,
@@ -103,9 +103,8 @@ export default function AdminUserInstallPage() {
     paymentMethodChanges: { date: string; type: "payment_method_added" | "payment_method_removed" | "payment_settings_updated" }[];
   };
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
-  const [assignedProperties, setAssignedProperties] = useState<Property[]>([]);
-  const [propertyDialogId, setPropertyDialogId] = useState<string | null>(null);
-  const [propertyDialogData, setPropertyDialogData] = useState<Property | null>(null);
+  const [assignedUnit, setAssignedUnit] = useState<Unit | null>(null);
+  const [unitDialogOpen, setUnitDialogOpen] = useState(false);
   const [uninstallLoading, setUninstallLoading] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [editedNameValue, setEditedNameValue] = useState("");
@@ -115,9 +114,9 @@ export default function AdminUserInstallPage() {
   const [editingContactField, setEditingContactField] = useState<"email" | "phone" | "address" | null>(null);
   const [editingContactValue, setEditingContactValue] = useState("");
   const [contactClickCaretIndex, setContactClickCaretIndex] = useState(0);
+  const [contactAddressStandardized, setContactAddressStandardized] = useState(false);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const phoneInputRef = useRef<HTMLInputElement>(null);
-  const addressInputRef = useRef<HTMLInputElement>(null);
   const prevInstallDialogOpen = useRef(false);
 
   useEffect(() => {
@@ -209,51 +208,37 @@ export default function AdminUserInstallPage() {
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
-    fetch("/api/admin/property")
-      .then((res) => (res.ok ? res.json() : Promise.resolve({ properties: [] })))
-      .then((json: { properties: Property[] }) => {
-        if (!cancelled && json.properties)
-          setAssignedProperties(json.properties.filter((p) => p.assignedUserId === userId));
+    fetch(`/api/admin/units?userId=${encodeURIComponent(userId)}`)
+      .then((res) => (res.ok ? res.json() : Promise.resolve(null)))
+      .then((json: Unit | null) => {
+        if (!cancelled) setAssignedUnit(json);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setAssignedUnit(null);
+      });
     return () => { cancelled = true; };
   }, [userId]);
 
-  useEffect(() => {
-    if (!propertyDialogId) {
-      setPropertyDialogData(null);
-      return;
-    }
-    let cancelled = false;
-    fetch(`/api/admin/property/${propertyDialogId}`)
-      .then((res) => (res.ok ? res.json() : Promise.resolve(null)))
-      .then((json: Property | null) => {
-        if (!cancelled) setPropertyDialogData(json);
-      })
-      .catch(() => {
-        if (!cancelled) setPropertyDialogData(null);
-      });
-    return () => { cancelled = true; };
-  }, [propertyDialogId]);
+  // Unit dialog uses embedded washer/dryer from assignedUnit directly
 
-  async function refetchAssignedProperties() {
-    const res = await fetch("/api/admin/property");
-    const json = (await res.json()) as { properties?: Property[] };
-    if (json.properties) setAssignedProperties(json.properties.filter((p) => p.assignedUserId === userId));
+  async function refetchAssignedUnit() {
+    const res = await fetch(`/api/admin/units?userId=${encodeURIComponent(userId)}`);
+    const json = await res.json();
+    setAssignedUnit(res.ok ? json : null);
   }
 
-  async function handleUninstall(propertyId: string) {
+  async function handleSendToWarehouse() {
+    if (!assignedUnit) return;
     setUninstallLoading(true);
     try {
-      const res = await fetch(`/api/admin/property/${propertyId}`, {
+      const res = await fetch(`/api/admin/units/${assignedUnit.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ assignedUserId: null }),
       });
-      if (!res.ok) throw new Error("Failed to uninstall");
-      setPropertyDialogId(null);
-      setPropertyDialogData(null);
-      await refetchAssignedProperties();
+      if (!res.ok) throw new Error("Failed to send to warehouse");
+      setUnitDialogOpen(false);
+      await refetchAssignedUnit();
     } catch {
       setUninstallLoading(false);
     } finally {
@@ -277,9 +262,7 @@ export default function AdminUserInstallPage() {
         ? emailInputRef.current
         : editingContactField === "phone"
           ? phoneInputRef.current
-          : editingContactField === "address"
-            ? addressInputRef.current
-            : null;
+          : null;
     if (!editingContactField || !ref) return;
     const idx = contactClickCaretIndex;
     const id = requestAnimationFrame(() => {
@@ -783,38 +766,58 @@ export default function AdminUserInstallPage() {
                 </div>
                 <div>
                   {editingContactField === "address" ? (
-                    <div className="flex items-center gap-2">
+                    <div
+                      className="flex items-center gap-2"
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          setEditingContactValue(customerProfile?.address ?? [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") ?? "");
+                          setEditingContactField(null);
+                        }
+                      }}
+                    >
                       <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <input
-                        ref={addressInputRef}
-                        type="text"
-                        className="flex-1 min-w-0 h-9 text-sm bg-transparent border-0 outline-none focus:outline-none focus:ring-0 cursor-text rounded px-1 -mx-1"
-                        value={editingContactValue}
-                        onChange={(e) => setEditingContactValue(e.target.value)}
-                        onBlur={() => {
-                          fetch(`/api/admin/users/${userId}`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ address: editingContactValue.trim() || undefined }),
-                          })
-                            .then((res) => res.ok && res.json())
-                            .then((json: { address?: string } | undefined) => {
-                              if (json != null)
-                                setCustomerProfile((p) => ({ ...(p ?? {}), address: json?.address ?? p?.address } as CustomerProfile));
+                      <div className="flex-1 min-w-0 flex items-center gap-2">
+                        <AddressAutocomplete
+                          id="contact-address"
+                          value={editingContactValue}
+                          onChange={setEditingContactValue}
+                          onPlaceSelect={({ street, city, state, zip }) => {
+                            setEditingContactValue([street, city, state, zip].filter(Boolean).join(", "));
+                            setContactAddressStandardized(true);
+                          }}
+                          onStandardizedChange={setContactAddressStandardized}
+                          placeholder="Add address"
+                          className="h-9 text-sm"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 h-9 px-2"
+                          onClick={() => {
+                            const hasAddress = editingContactValue.trim() !== "";
+                            const useGoogleAutocomplete = process.env.NEXT_PUBLIC_USE_GOOGLE_ADDRESS_AUTOCOMPLETE === "true";
+                            if (hasAddress && !contactAddressStandardized && useGoogleAutocomplete) {
+                              setError("Please select an address from the suggestions to standardize it.");
+                              return;
+                            }
+                            setError(null);
+                            fetch(`/api/admin/users/${userId}`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ address: editingContactValue.trim() || undefined }),
                             })
-                            .finally(() => setEditingContactField(null));
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                          if (e.key === "Escape") {
-                            setEditingContactValue(customerProfile?.address ?? [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") ?? "");
-                            setEditingContactField(null);
-                            (e.target as HTMLInputElement).blur();
-                          }
-                        }}
-                        placeholder="Add address"
-                        autoFocus
-                      />
+                              .then((res) => res.ok && res.json())
+                              .then((json: { address?: string } | undefined) => {
+                                if (json != null)
+                                  setCustomerProfile((p) => ({ ...(p ?? {}), address: json?.address ?? p?.address } as CustomerProfile));
+                              })
+                              .finally(() => setEditingContactField(null));
+                          }}
+                        >
+                          Done
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <button
@@ -823,6 +826,7 @@ export default function AdminUserInstallPage() {
                         const value = customerProfile?.address ?? [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") ?? "";
                         setEditingContactValue(value);
                         setContactClickCaretIndex(getCaretIndexFromClick(e, value.length));
+                        setContactAddressStandardized(false);
                         setEditingContactField("address");
                       }}
                       className="flex items-center gap-2 text-sm text-left w-full rounded px-2 py-1.5 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text"
@@ -839,47 +843,26 @@ export default function AdminUserInstallPage() {
             </CardContent>
           </Card>
 
-          {/* Units installed */}
+          {/* Unit installed */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Units installed</CardTitle>
-              <CardDescription>Properties assigned to this customer</CardDescription>
+              <CardTitle className="text-base">Unit</CardTitle>
+              <CardDescription>Washer and dryer pair assigned to this customer</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-2">
-              {(() => {
-                const washerProperty = assignedProperties.find((p) => p.unitType === "Washer");
-                const dryerProperty = assignedProperties.find((p) => p.unitType === "Dryer");
-                return (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => washerProperty && setPropertyDialogId(washerProperty.id)}
-                      disabled={!washerProperty}
-                      className={
-                        washerProperty
-                          ? "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-green-600 dark:border-green-500 bg-green-50 dark:bg-green-950/40 px-4 py-3 text-sm font-medium text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 cursor-pointer"
-                          : "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-muted-foreground cursor-default border-dashed"
-                      }
-                    >
-                      {!washerProperty && <Plus className="h-4 w-4" />}
-                      Washer
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => dryerProperty && setPropertyDialogId(dryerProperty.id)}
-                      disabled={!dryerProperty}
-                      className={
-                        dryerProperty
-                          ? "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-green-600 dark:border-green-500 bg-green-50 dark:bg-green-950/40 px-4 py-3 text-sm font-medium text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 cursor-pointer"
-                          : "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-muted-foreground cursor-default border-dashed"
-                      }
-                    >
-                      {!dryerProperty && <Plus className="h-4 w-4" />}
-                      Dryer
-                    </button>
-                  </>
-                );
-              })()}
+            <CardContent>
+              <button
+                type="button"
+                onClick={() => assignedUnit && setUnitDialogOpen(true)}
+                disabled={!assignedUnit}
+                className={
+                  assignedUnit
+                    ? "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-green-600 dark:border-green-500 bg-green-50 dark:bg-green-950/40 px-4 py-3 text-sm font-medium text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 cursor-pointer"
+                    : "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-muted-foreground cursor-default border-dashed"
+                }
+              >
+                {!assignedUnit && <Plus className="h-4 w-4" />}
+                {assignedUnit ? "View unit" : "No unit assigned"}
+              </button>
             </CardContent>
           </Card>
 
@@ -893,7 +876,7 @@ export default function AdminUserInstallPage() {
               <div className="flex items-baseline gap-2">
                 <DollarSign className="h-5 w-5 text-muted-foreground" />
                 <span className="text-2xl font-bold text-foreground">
-                  ${lifetimeValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {lifetimeValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </CardContent>
@@ -1405,57 +1388,50 @@ export default function AdminUserInstallPage() {
         </Card>
       </aside>
 
-      {/* Property info popup */}
-      <Dialog open={!!propertyDialogId} onOpenChange={(open) => !open && setPropertyDialogId(null)}>
+      {/* Unit info popup */}
+      <Dialog open={unitDialogOpen} onOpenChange={(open) => !open && setUnitDialogOpen(false)}>
         <DialogContent className="max-w-md">
-          {propertyDialogData ? (
+          {assignedUnit ? (
             <>
               <DialogHeader>
-                <DialogTitle>Property info</DialogTitle>
-                <DialogDescription className="font-mono text-xs break-all">{propertyDialogData.id}</DialogDescription>
+                <DialogTitle>Unit</DialogTitle>
+                <DialogDescription className="font-mono text-xs break-all">{assignedUnit.id}</DialogDescription>
               </DialogHeader>
-              <Card>
-                <CardContent className="pt-6 space-y-4">
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Model</p>
-                    <p className="text-sm">{propertyDialogData.model}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Unit type</p>
-                    <p className="text-sm">{propertyDialogData.unitType ?? "—"}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Status</p>
-                    <p className="text-sm">
-                      {propertyDialogData.status === "needs_repair"
-                        ? "Needs repair"
-                        : propertyDialogData.status === "no_longer_owned"
-                          ? "No longer owned"
-                          : propertyDialogData.assignedUserId
-                            ? "Installed"
-                            : "Available"}
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Purchase cost</p>
-                    <p className="text-sm">
-                      {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(propertyDialogData.purchaseCost)}
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Revenue generated</p>
-                    <p className="text-sm">
-                      {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(propertyDialogData.revenueGenerated ?? 0)}
-                    </p>
-                  </div>
-                  {(propertyDialogData.notes ?? "").trim() && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">Notes</p>
-                      <p className="text-sm text-muted-foreground">{propertyDialogData.notes}</p>
-                    </div>
+              <div className="space-y-2">
+                <div className="text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">Unit cost:</span>{" "}
+                  {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(
+                    (assignedUnit.washer.purchaseCost ?? 0) + (assignedUnit.washer.repairCosts ?? 0)
                   )}
-                </CardContent>
-              </Card>
+                  {assignedUnit.washer.acquisitionSource && (
+                    <> · From: {assignedUnit.washer.acquisitionSource}</>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">Unit revenue:</span>{" "}
+                  {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(
+                    (assignedUnit.washer.revenueGenerated ?? 0) + (assignedUnit.dryer.revenueGenerated ?? 0)
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Card className="border-green-600 dark:border-green-500">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Washer</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-sm font-medium">{[assignedUnit.washer.brand, assignedUnit.washer.model].filter(Boolean).join(" ") || "—"}</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-green-600 dark:border-green-500">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Dryer</CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <p className="text-sm font-medium">{[assignedUnit.dryer.brand, assignedUnit.dryer.model].filter(Boolean).join(" ") || "—"}</p>
+                  </CardContent>
+                </Card>
+              </div>
               <div className="flex items-center justify-between gap-2">
                 <Button variant="outline" size="sm" asChild>
                   <Link href="/admin/property">
@@ -1463,21 +1439,17 @@ export default function AdminUserInstallPage() {
                     <ExternalLink className="h-3 w-3 ml-1 inline" />
                   </Link>
                 </Button>
-                {propertyDialogData.assignedUserId && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleUninstall(propertyDialogData.id)}
-                    disabled={uninstallLoading}
-                  >
-                    {uninstallLoading ? "Sending…" : "Send to warehouse"}
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSendToWarehouse}
+                  disabled={uninstallLoading}
+                >
+                  {uninstallLoading ? "Sending…" : "Send to warehouse"}
+                </Button>
               </div>
             </>
-          ) : (
-            <p className="text-sm text-muted-foreground py-4">Loading…</p>
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>

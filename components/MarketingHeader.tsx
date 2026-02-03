@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { useTheme } from "next-themes";
 import { useAuth } from "@clerk/nextjs";
@@ -22,7 +23,9 @@ type MarketingHeaderProps = {
 };
 
 export function MarketingHeader({ variant = "default" }: MarketingHeaderProps) {
+  const pathname = usePathname();
   const { isSignedIn, signOut } = useAuth();
+  const isLandingPage = pathname === "/";
   const { openGetStarted } = useGetStarted();
   const { setTheme, resolvedTheme } = useTheme();
   const [isScrolled, setIsScrolled] = useState(false);
@@ -157,7 +160,7 @@ export function MarketingHeader({ variant = "default" }: MarketingHeaderProps) {
                   size="icon"
                   className="relative h-9 w-9 shrink-0"
                   onClick={() => setTheme(isDark ? "light" : "dark")}
-                  aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                  aria-label="Toggle theme"
                 >
                   <Sun className="h-4 w-4 scale-0 transition-all dark:scale-100" />
                   <Moon className="absolute h-4 w-4 scale-100 transition-all dark:scale-0" />
@@ -174,14 +177,20 @@ export function MarketingHeader({ variant = "default" }: MarketingHeaderProps) {
                   size="icon"
                   className="relative h-9 w-9 shrink-0"
                   onClick={() => setTheme(isDark ? "light" : "dark")}
-                  aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                  aria-label="Toggle theme"
                 >
                   <Sun className="h-4 w-4 scale-0 transition-all dark:scale-100" />
                   <Moon className="absolute h-4 w-4 scale-100 transition-all dark:scale-0" />
                 </Button>
               )}
               {isSignedIn ? (
-            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => signOut({ redirectUrl: "/" })} aria-label="Log out">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-9 w-9 shrink-0 ${isLandingPage ? "hidden md:inline-flex" : ""}`}
+              onClick={() => signOut({ redirectUrl: "/" })}
+              aria-label="Log out"
+            >
               <LogOut className="h-4 w-4" />
             </Button>
           ) : (

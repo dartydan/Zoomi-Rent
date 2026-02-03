@@ -13,11 +13,12 @@ export type Property = {
   model: string;
   /** Washer or Dryer. */
   unitType?: PropertyUnitType;
-  purchaseCost: number; // cost to purchase the asset
-  revenueGenerated: number; // stored cumulative; + current assignment when assigned
+  purchaseCost: number;
+  repairCosts: number;
+  acquisitionSource?: string;
+  revenueGenerated: number;
   notes?: string;
-  assignedUserId?: string; // Clerk user id; when set, revenue is computed from Stripe
-  /** Manual status. Green (installed) is automatic when assigned + customer has install date. */
+  /** Manual status. Location/assignment is via Unit. */
   status?: PropertyStatus;
   createdAt: string; // ISO
   updatedAt: string; // ISO
