@@ -23,7 +23,7 @@ const plans: Plan[] = [
     basePrice: 70,
     autoPayPrice: 60,
     description:
-      "Reliable washer and dryer rental for everyday use. Includes delivery, professional installation at no cost, and normal wear coverage. Ideal for tenants who want dependable machines without unnecessary extras.",
+      "Reliable washer and dryer rental for everyday use. Includes delivery, professional installation at no cost* and generous wear coverage. Ideal for tenants who want dependable machines without unnecessary extras.",
   },
   {
     id: "plus",

@@ -3,6 +3,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { removePendingByEmail } from "@/lib/pending-customers-store";
+import { sendNewCustomerEmail } from "@/lib/send-new-customer-email";
 
 export const dynamic = "force-dynamic";
 
@@ -141,6 +142,21 @@ export async function POST(req: NextRequest) {
     });
 
     await removePendingByEmail(email).catch(() => {});
+
+    sendNewCustomerEmail({
+      firstName,
+      lastName,
+      email,
+      phone,
+      address,
+      street: street || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      zip: zip || undefined,
+      desiredInstallTime: desiredInstallTime || undefined,
+      housingType,
+      selectedPlan,
+    }).catch((err) => console.error("New customer email failed:", err));
 
     return NextResponse.json({
       success: true,

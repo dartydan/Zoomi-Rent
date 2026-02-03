@@ -193,6 +193,9 @@ function MarketingFooter() {
         <p className="text-xs text-muted-foreground text-center sm:text-left">
           Serving East Central Indiana: {FOOTER_LOCATIONS.join(", ")}
         </p>
+        <p className="text-xs text-muted-foreground text-center sm:text-left">
+          *Installation fee of $40 is waived with a six month commitment
+        </p>
       </div>
     </footer>
   );
