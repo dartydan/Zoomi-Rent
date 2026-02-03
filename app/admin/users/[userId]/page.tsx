@@ -13,6 +13,7 @@ import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, Externa
 import type { InstallInfo, InstallRecord } from "@/lib/install";
 import type { Unit } from "@/lib/unit";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { LoadingAnimation } from "@/components/LoadingAnimation";
 import {
   Dialog,
   DialogContent,
@@ -596,7 +597,7 @@ export default function AdminUserInstallPage() {
       <div className="min-w-0 space-y-6">
       {loading ? (
         <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-border bg-muted/30 p-8">
-          <p className="text-muted-foreground">Loading…</p>
+          <LoadingAnimation size="lg" />
         </div>
       ) : error && !data && !customerProfile ? (
         <Card>
@@ -1355,7 +1356,9 @@ export default function AdminUserInstallPage() {
                 })()}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Loading timeline…</p>
+              <div className="flex justify-center py-4">
+                <LoadingAnimation size="sm" />
+              </div>
             )}
           </CardContent>
         </Card>

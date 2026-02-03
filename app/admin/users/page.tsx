@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Search, UserPlus, Mail, Phone, MapPin, Package, Calendar, Check } from "lucide-react";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { LoadingAnimation } from "@/components/LoadingAnimation";
 
 type Customer = {
   id: string;
@@ -411,8 +412,8 @@ export default function CustomersPage() {
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">
-              Loading…
+            <div className="py-8 flex justify-center">
+              <LoadingAnimation size="md" />
             </div>
           ) : (
             <Table>

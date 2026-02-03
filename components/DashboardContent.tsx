@@ -13,6 +13,7 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
+import { LoadingAnimation } from "@/components/LoadingAnimation";
 
 interface Invoice {
   id: string;
@@ -215,7 +216,7 @@ export function DashboardContent() {
   if (loading) {
     return (
       <div className="flex min-h-[200px] items-center justify-center">
-        <p className="text-muted-foreground">Loading…</p>
+        <LoadingAnimation size="lg" />
       </div>
     );
   }

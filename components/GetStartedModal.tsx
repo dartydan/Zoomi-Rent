@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { LoadingAnimation } from "@/components/LoadingAnimation";
 
 const HOUSING_OPTIONS = [
   { value: "rent", label: "Renting" },
@@ -277,7 +278,9 @@ export function GetStartedModal() {
         </DialogHeader>
 
         {!loaded ? (
-          <p className="text-sm text-muted-foreground py-4">Loading…</p>
+          <div className="flex justify-center py-8">
+            <LoadingAnimation size="md" />
+          </div>
         ) : step === "verify" ? (
           <form onSubmit={handleVerifyCode} className="space-y-4">
             {error && (

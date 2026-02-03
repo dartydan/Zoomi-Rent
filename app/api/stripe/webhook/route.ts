@@ -1,0 +1,84 @@
+import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import Stripe from "stripe";
+import { addPendingCustomer } from "@/lib/pending-customers-store";
+
+export const dynamic = "force-dynamic";
+
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
+  return new Stripe(key);
+}
+
+export async function POST(req: Request) {
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  if (!webhookSecret) {
+    console.error("Stripe webhook: STRIPE_WEBHOOK_SECRET is not set");
+    return NextResponse.json(
+      { error: "Webhook secret not configured" },
+      { status: 500 }
+    );
+  }
+
+  let event: Stripe.Event;
+  try {
+    const body = await req.text();
+    const signature = (await headers()).get("stripe-signature");
+    if (!signature) {
+      return NextResponse.json({ error: "Missing Stripe-Signature header" }, { status: 400 });
+    }
+    const stripe = getStripe();
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Stripe webhook signature verification failed:", message);
+    return NextResponse.json({ error: `Webhook Error: ${message}` }, { status: 400 });
+  }
+
+  if (event.type !== "customer.created") {
+    return NextResponse.json({ received: true }, { status: 200 });
+  }
+
+  const customer = event.data.object as Stripe.Customer;
+
+  if (customer.metadata?.clerk_user_id) {
+    return NextResponse.json({ received: true, skipped: "already linked to Clerk" }, { status: 200 });
+  }
+
+  const email = (customer.email ?? "").trim();
+  const name = (customer.name ?? "").trim();
+  const addr = customer.address;
+  const street = (addr?.line1 ?? "").trim();
+  const city = (addr?.city ?? "").trim();
+  const state = (addr?.state ?? "").trim();
+  const zip = (addr?.postal_code ?? "").trim();
+  const hasAddress = !!(street || city || state || zip);
+
+  if (!email && !name && !hasAddress) {
+    return NextResponse.json({ received: true, skipped: "no email, name, or address" }, { status: 200 });
+  }
+
+  const [firstName, ...lastParts] = name.split(/\s+/);
+  const lastName = lastParts.join(" ") || "";
+
+  try {
+    await addPendingCustomer({
+      email: email || "",
+      firstName: firstName || undefined,
+      lastName: lastName || undefined,
+      street: street || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      zip: zip || undefined,
+    });
+  } catch (err) {
+    console.error("Stripe webhook: failed to add pending customer:", err);
+    return NextResponse.json(
+      { error: "Failed to add pending customer" },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ received: true }, { status: 200 });
+}

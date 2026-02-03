@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus, DollarSign, TrendingUp, User } from "lucide-react";
+import { LoadingAnimation } from "@/components/LoadingAnimation";
 import type { Unit, MachineInfo, MachineStatus } from "@/lib/unit";
 
 type EditableField = "washer" | "dryer" | "unit";
@@ -241,8 +242,8 @@ export default function PropertyPage() {
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">
-              Loading…
+            <div className="py-8 flex justify-center">
+              <LoadingAnimation size="md" />
             </div>
           ) : (
             <Table>
