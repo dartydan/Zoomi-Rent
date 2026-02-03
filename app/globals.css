@@ -440,25 +440,4 @@
   *::-webkit-scrollbar-thumb:active {
     background: hsl(var(--primary) / 0.7);
   }
-
-  /* Google Places Autocomplete dropdown (AddressAutocomplete) */
-  .pac-container {
-    position: fixed !important;
-    z-index: 99999 !important;
-    border-radius: var(--radius);
-    border: 1px solid hsl(var(--border));
-    box-shadow: var(--shadow-md);
-    margin-top: 2px;
-    font-family: var(--font-sans);
-    background: hsl(var(--background));
-    pointer-events: auto !important;
-  }
-  .pac-container .pac-item {
-    padding: 0.5rem 0.75rem;
-    cursor: pointer;
-  }
-  .pac-container .pac-item:hover,
-  .pac-container .pac-item-selected {
-    background: hsl(var(--muted));
-  }
 }

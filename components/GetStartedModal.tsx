@@ -34,7 +34,6 @@ export function GetStartedModal() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [address, setAddress] = useState("");
-  const [addressStandardized, setAddressStandardized] = useState(false);
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
@@ -74,7 +73,6 @@ export function GetStartedModal() {
       setPassword("");
     }
     setAddress("");
-    setAddressStandardized(false);
     setStreet("");
     setCity("");
     setState("");
@@ -135,7 +133,6 @@ export function GetStartedModal() {
       if (data.found && data.lastName != null) setLastName(data.lastName);
       if (data.found && data.address != null) {
         setAddress(data.address);
-        setAddressStandardized(false);
         setStreet("");
         setCity("");
         setState("");
@@ -147,7 +144,6 @@ export function GetStartedModal() {
         setCity(data.city ?? "");
         setState(data.state ?? "");
         setZip(data.zip ?? "");
-        setAddressStandardized(true);
       }
     } catch {
       // ignore lookup errors
@@ -160,12 +156,6 @@ export function GetStartedModal() {
 
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !address.trim() || !phone.trim()) {
       setError("Please fill in all required fields.");
-      return;
-    }
-
-    const useGoogleAutocomplete = process.env.NEXT_PUBLIC_USE_GOOGLE_ADDRESS_AUTOCOMPLETE === "true";
-    if (address.trim() && !addressStandardized && useGoogleAutocomplete) {
-      setError("Please select an address from the suggestions to standardize it.");
       return;
     }
 
@@ -396,16 +386,6 @@ export function GetStartedModal() {
                   setCity(c);
                   setState(st);
                   setZip(z);
-                  setAddressStandardized(true);
-                }}
-                onStandardizedChange={(standardized) => {
-                  setAddressStandardized(standardized);
-                  if (!standardized) {
-                    setStreet("");
-                    setCity("");
-                    setState("");
-                    setZip("");
-                  }
                 }}
                 placeholder="Street, city, state, ZIP"
                 required

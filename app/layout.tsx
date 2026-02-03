@@ -23,8 +23,6 @@ const hasClerkKey = !!(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.trim()
 );
 
-const googleMapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
-
 export default function RootLayout({
   children,
 }: Readonly<{

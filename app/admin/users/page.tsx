@@ -70,13 +70,8 @@ export default function CustomersPage() {
   const [addCity, setAddCity] = useState("");
   const [addState, setAddState] = useState("");
   const [addZip, setAddZip] = useState("");
-  const [addAddressStandardized, setAddAddressStandardized] = useState(false);
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (addCustomerOpen) setAddAddressStandardized(false);
-  }, [addCustomerOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -175,10 +170,6 @@ export default function CustomersPage() {
     const hasAddress = [addStreet, addCity, addState, addZip].some((s) => s.trim() !== "");
     if (!firstName && !lastName && !email && !hasAddress) {
       setAddError("Enter at least one field (name, email, or address).");
-      return;
-    }
-    if (hasAddress && !addAddressStandardized) {
-      setAddError("Please select an address from the suggestions to standardize it.");
       return;
     }
     setAddSaving(true);
@@ -298,7 +289,6 @@ export default function CustomersPage() {
                     setAddState(st);
                     setAddZip(z);
                   }}
-                  onStandardizedChange={setAddAddressStandardized}
                   placeholder="Street address (optional)"
                 />
               </div>

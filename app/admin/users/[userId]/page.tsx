@@ -84,7 +84,6 @@ export default function AdminUserInstallPage() {
   const [installCity, setInstallCity] = useState("");
   const [installState, setInstallState] = useState("");
   const [installZip, setInstallZip] = useState("");
-  const [installAddressStandardized, setInstallAddressStandardized] = useState(false);
   const [editingAddress, setEditingAddress] = useState(false);
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
@@ -114,7 +113,6 @@ export default function AdminUserInstallPage() {
   const [editingContactField, setEditingContactField] = useState<"email" | "phone" | "address" | null>(null);
   const [editingContactValue, setEditingContactValue] = useState("");
   const [contactClickCaretIndex, setContactClickCaretIndex] = useState(0);
-  const [contactAddressStandardized, setContactAddressStandardized] = useState(false);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const prevInstallDialogOpen = useRef(false);
@@ -289,7 +287,6 @@ export default function AdminUserInstallPage() {
         setExistingContractUrls(rec.contractUrls ?? []);
         setPhotos([]);
         setContracts([]);
-        setInstallAddressStandardized(false);
         setEditingAddress(false);
       }
     } else {
@@ -304,7 +301,6 @@ export default function AdminUserInstallPage() {
       setExistingContractUrls([]);
       setPhotos([]);
       setContracts([]);
-      setInstallAddressStandardized(false);
       setEditingAddress(false);
     }
     setError(null);
@@ -317,12 +313,6 @@ export default function AdminUserInstallPage() {
 
   async function handleCardSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const hasInstallAddress = [installStreet, installCity, installState, installZip].some((s) => s.trim() !== "");
-    const useGoogleAutocomplete = process.env.NEXT_PUBLIC_USE_GOOGLE_ADDRESS_AUTOCOMPLETE === "true";
-    if (editingAddress && hasInstallAddress && !installAddressStandardized && useGoogleAutocomplete) {
-      setError("Please select an address from the suggestions to standardize it.");
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
@@ -390,12 +380,6 @@ export default function AdminUserInstallPage() {
 
   async function handleInstallSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const hasInstallAddress = [installStreet, installCity, installState, installZip].some((s) => s.trim() !== "");
-    const useGoogleAutocomplete = process.env.NEXT_PUBLIC_USE_GOOGLE_ADDRESS_AUTOCOMPLETE === "true";
-    if (editingAddress && hasInstallAddress && !installAddressStandardized && useGoogleAutocomplete) {
-      setError("Please select an address from the suggestions to standardize it.");
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
@@ -783,9 +767,7 @@ export default function AdminUserInstallPage() {
                           onChange={setEditingContactValue}
                           onPlaceSelect={({ street, city, state, zip }) => {
                             setEditingContactValue([street, city, state, zip].filter(Boolean).join(", "));
-                            setContactAddressStandardized(true);
                           }}
-                          onStandardizedChange={setContactAddressStandardized}
                           placeholder="Add address"
                           className="h-9 text-sm"
                         />
@@ -795,12 +777,6 @@ export default function AdminUserInstallPage() {
                           size="sm"
                           className="shrink-0 h-9 px-2"
                           onClick={() => {
-                            const hasAddress = editingContactValue.trim() !== "";
-                            const useGoogleAutocomplete = process.env.NEXT_PUBLIC_USE_GOOGLE_ADDRESS_AUTOCOMPLETE === "true";
-                            if (hasAddress && !contactAddressStandardized && useGoogleAutocomplete) {
-                              setError("Please select an address from the suggestions to standardize it.");
-                              return;
-                            }
                             setError(null);
                             fetch(`/api/admin/users/${userId}`, {
                               method: "PATCH",
@@ -826,7 +802,6 @@ export default function AdminUserInstallPage() {
                         const value = customerProfile?.address ?? [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") ?? "";
                         setEditingContactValue(value);
                         setContactClickCaretIndex(getCaretIndexFromClick(e, value.length));
-                        setContactAddressStandardized(false);
                         setEditingContactField("address");
                       }}
                       className="flex items-center gap-2 text-sm text-left w-full rounded px-2 py-1.5 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text"
@@ -1172,9 +1147,7 @@ export default function AdminUserInstallPage() {
                   setInstallCity(parts.city);
                   setInstallState(parts.state);
                   setInstallZip(parts.zip);
-                  setInstallAddressStandardized(true);
                 }}
-                onStandardizedChange={setInstallAddressStandardized}
                 placeholder="Street address"
               />
             </div>
