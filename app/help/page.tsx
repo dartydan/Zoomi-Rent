@@ -53,11 +53,26 @@ export default function HelpPage() {
         </CardContent>
       </Card>
       <p className="mt-4 text-sm text-muted-foreground">
-        765-280-0057 · help@zoomi.co
+        <a
+          href={PHONE_NUMBER}
+          className="text-muted-foreground no-underline hover:opacity-80 cursor-pointer"
+        >
+          765-280-0057
+        </a>
+        {" · "}
+        <a
+          href="mailto:help@zoomi.co"
+          className="text-muted-foreground no-underline hover:opacity-80 cursor-pointer"
+        >
+          help@zoomi.co
+        </a>
       </p>
-      <Button asChild variant="ghost" className="mt-4">
-        <Link href="/">rent.zoomi.co</Link>
-      </Button>
+      <a
+        href="/"
+        className="mt-4 text-sm font-bold text-primary hover:opacity-80"
+      >
+        rent.zoomi.co
+      </a>
     </div>
   );
 }
