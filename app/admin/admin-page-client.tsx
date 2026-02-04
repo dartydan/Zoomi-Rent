@@ -377,17 +377,19 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                     <TableRow key={`${t.date}-${t.customerName}-${t.amount}-${i}`}>
                       <TableCell>
                         {t.type === "subscription" ? (
-                          <Repeat
-                            className="h-4 w-4 text-muted-foreground"
-                            title="Subscription"
-                            aria-label="Subscription"
-                          />
+                          <span title="Subscription">
+                            <Repeat
+                              className="h-4 w-4 text-muted-foreground"
+                              aria-label="Subscription"
+                            />
+                          </span>
                         ) : (
-                          <FileText
-                            className="h-4 w-4 text-muted-foreground"
-                            title="One-off invoice"
-                            aria-label="One-off invoice"
-                          />
+                          <span title="One-off invoice">
+                            <FileText
+                              className="h-4 w-4 text-muted-foreground"
+                              aria-label="One-off invoice"
+                            />
+                          </span>
                         )}
                       </TableCell>
                       <TableCell className="font-medium">{t.customerName}</TableCell>
