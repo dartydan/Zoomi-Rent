@@ -55,6 +55,9 @@ export default function HelpPage() {
       <p className="mt-4 text-sm text-muted-foreground">
         765-280-0057 · help@zoomi.co
       </p>
+      <Button asChild variant="ghost" className="mt-4">
+        <Link href="/">rent.zoomi.co</Link>
+      </Button>
     </div>
   );
 }
