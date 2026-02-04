@@ -31,6 +31,235 @@ export type AdminRevenueData = {
   nextMonthName: string;
 };
 
+export type RevenueTransaction = {
+  customerName: string;
+  date: string; // YYYY-MM-DD for sorting
+  dateTimestamp: number; // Unix seconds - format on client in local timezone for correct display
+  amount: number;
+  type: "subscription" | "invoice"; // subscription = recurring, invoice = one-off
+};
+
+export type MonthKey = "last" | "this" | "next";
+
+export async function computeRevenueTransactions(
+  month: MonthKey
+): Promise<RevenueTransaction[]> {
+  const stripe = getStripe();
+  const transactions: RevenueTransaction[] = [];
+
+  const monthOffset = month === "last" ? -1 : month === "this" ? 0 : 1;
+  const bounds = getMonthBounds(monthOffset);
+
+  if (!stripe) return transactions;
+
+  if (month === "last" || month === "this") {
+    // Balance transactions (charge, payment) - matches primary revenue source
+    const incomeTypes = ["charge", "payment"] as const;
+    for (const txType of incomeTypes) {
+      let hasMore = true;
+      let startingAfter: string | undefined;
+      while (hasMore) {
+        const list = await stripe.balanceTransactions.list({
+          type: txType,
+          created: { gte: bounds.start, lte: bounds.end },
+          limit: 100,
+          expand: ["data.source", "data.source.invoice"],
+          ...(startingAfter && { starting_after: startingAfter }),
+        });
+        for (const tx of list.data) {
+          const amount = (tx.amount ?? 0) / 100;
+          if (amount <= 0) continue;
+          const dateStr = new Date((tx.created ?? 0) * 1000).toISOString().split("T")[0];
+          const source = tx.source;
+          let customerName = "—";
+          let isSubscription = false;
+          if (source && typeof source === "object" && !("deleted" in source)) {
+            const src = source as Stripe.Charge | Stripe.PaymentIntent;
+            const cust = "customer" in src ? src.customer : null;
+            if (cust && typeof cust === "object" && cust && !("deleted" in cust)) {
+              customerName =
+                (cust as Stripe.Customer).name ?? (cust as Stripe.Customer).email ?? "—";
+            } else if (typeof cust === "string") {
+              try {
+                const c = await stripe.customers.retrieve(cust);
+                if (c && !("deleted" in c)) {
+                  customerName = c.name ?? c.email ?? "—";
+                }
+              } catch {
+                // ignore
+              }
+            }
+            const inv = "invoice" in src ? src.invoice : null;
+            if (inv && typeof inv === "object" && inv && !("deleted" in inv)) {
+              isSubscription = !!(inv as Stripe.Invoice).subscription;
+            }
+          }
+          const ts = tx.created ?? 0;
+          transactions.push({
+            customerName: String(customerName).trim() || "—",
+            date: dateStr,
+            dateTimestamp: ts,
+            amount,
+            type: isSubscription ? "subscription" : "invoice",
+          });
+        }
+        hasMore = list.has_more;
+        if (list.data.length > 0) startingAfter = list.data[list.data.length - 1].id;
+        else hasMore = false;
+      }
+    }
+  }
+
+  if (month === "this" || month === "next") {
+    // Draft/open invoices (expected/forecast)
+    for (const invStatus of ["draft", "open"] as const) {
+      let invHasMore = true;
+      let invStartingAfter: string | undefined;
+      while (invHasMore) {
+        const invList = await stripe.invoices.list({
+          status: invStatus,
+          limit: 100,
+          expand: ["data.customer"],
+          ...(invStartingAfter && { starting_after: invStartingAfter }),
+        });
+        for (const inv of invList.data) {
+          if (inv.subscription) continue; // Subscription invoices handled separately
+          const dueTs = inv.due_date ?? inv.period_end ?? inv.created;
+          if (dueTs == null) continue;
+          const inRange = dueTs >= bounds.start && dueTs <= bounds.end;
+          if (!inRange) continue;
+
+          const amount = (inv.amount_due ?? inv.amount_remaining ?? 0) / 100;
+          if (amount <= 0) continue;
+
+          const customer = inv.customer;
+          let customerName = "—";
+          if (typeof customer === "object" && customer && !("deleted" in customer)) {
+            customerName =
+              (customer as Stripe.Customer).name ??
+              (customer as Stripe.Customer).email ??
+              "—";
+          } else if (typeof customer === "string") {
+            try {
+              const c = await stripe.customers.retrieve(customer);
+              if (c && !("deleted" in c)) {
+                customerName = c.name ?? c.email ?? "—";
+              }
+            } catch {
+              // ignore
+            }
+          }
+
+          transactions.push({
+            customerName: String(customerName).trim() || "—",
+            date: new Date(dueTs * 1000).toISOString().split("T")[0],
+            dateTimestamp: dueTs,
+            amount,
+            type: "invoice",
+          });
+        }
+        invHasMore = invList.has_more;
+        if (invList.data.length > 0) {
+          invStartingAfter = invList.data[invList.data.length - 1].id;
+        } else {
+          invHasMore = false;
+        }
+      }
+    }
+
+    // Subscriptions with upcoming payments
+    const subStatuses = ["active", "trialing", "past_due", "incomplete"] as const;
+    for (const status of subStatuses) {
+      let subHasMore = true;
+      let subStartingAfter: string | undefined;
+      while (subHasMore) {
+        const subList = await stripe.subscriptions.list({
+          status,
+          limit: 100,
+          expand: ["data.customer", "data.latest_invoice"],
+          ...(subStartingAfter && { starting_after: subStartingAfter }),
+        });
+        for (const sub of subList.data) {
+          const customerId =
+            typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
+          if (!customerId) continue;
+
+          let amount = 0;
+          let paymentTs: number | null = null;
+          const latestInv = sub.latest_invoice;
+          const invObj =
+            typeof latestInv === "object" && latestInv && !("deleted" in latestInv)
+              ? (latestInv as Stripe.Invoice)
+              : null;
+          const hasOpenOrDraft = invObj && (invObj.status === "open" || invObj.status === "draft");
+
+          if (hasOpenOrDraft && invObj) {
+            amount = (invObj.amount_due ?? invObj.amount_remaining ?? 0) / 100;
+            paymentTs = invObj.due_date ?? invObj.period_end ?? sub.current_period_end ?? null;
+          } else {
+            try {
+              const upcoming = await stripe.invoices.retrieveUpcoming({
+                customer: customerId,
+                subscription: sub.id,
+              });
+              amount = (upcoming.amount_due ?? upcoming.amount_remaining ?? 0) / 100;
+              paymentTs =
+                upcoming.due_date ?? upcoming.period_end ?? sub.current_period_end ?? null;
+            } catch {
+              paymentTs = sub.current_period_end ?? null;
+              if (paymentTs) {
+                for (const item of sub.items?.data ?? []) {
+                  const price = item?.price;
+                  const qty = item?.quantity ?? 1;
+                  if (price && typeof price === "object" && price.unit_amount != null) {
+                    amount += (price.unit_amount * qty) / 100;
+                  }
+                }
+              }
+            }
+          }
+
+          if (amount <= 0 || !paymentTs) continue;
+          if (paymentTs < bounds.start || paymentTs > bounds.end) continue;
+
+          let customerName = "—";
+          const cust = sub.customer;
+          if (typeof cust === "object" && cust && !("deleted" in cust)) {
+            customerName = (cust as Stripe.Customer).name ?? (cust as Stripe.Customer).email ?? "—";
+          } else if (typeof cust === "string") {
+            try {
+              const c = await stripe.customers.retrieve(cust);
+              if (c && !("deleted" in c)) {
+                customerName = c.name ?? c.email ?? "—";
+              }
+            } catch {
+              // ignore
+            }
+          }
+
+          transactions.push({
+            customerName: String(customerName).trim() || "—",
+            date: new Date(paymentTs * 1000).toISOString().split("T")[0],
+            dateTimestamp: paymentTs,
+            amount,
+            type: "subscription",
+          });
+        }
+        subHasMore = subList.has_more;
+        if (subList.data.length > 0) {
+          subStartingAfter = subList.data[subList.data.length - 1].id;
+        } else {
+          subHasMore = false;
+        }
+      }
+    }
+  }
+
+  // Sort by date ascending
+  transactions.sort((a, b) => a.date.localeCompare(b.date));
+  return transactions;
+}
+
 export async function computeAdminRevenue(): Promise<AdminRevenueData> {
   const stripe = getStripe();
   let lastMonthRevenue = 0;

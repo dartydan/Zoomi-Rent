@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import type { AdminRevenueData } from "@/lib/admin-revenue";
+import type { AdminRevenueData, RevenueTransaction } from "@/lib/admin-revenue";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -16,7 +16,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, User, Mail, Clock, Package, CheckCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, User, Mail, Clock, Package, CheckCircle, Repeat, FileText } from "lucide-react";
+import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { CustomSelect } from "@/components/ui/custom-select";
 import {
   Dialog,
@@ -58,6 +59,26 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [selectedUnits, setSelectedUnits] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("pending");
+
+  const [transactionsDialog, setTransactionsDialog] = useState<{
+    month: "last" | "this" | "next";
+    monthName: string;
+  } | null>(null);
+  const [transactions, setTransactions] = useState<RevenueTransaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+
+  // Fetch transactions when dialog opens
+  useEffect(() => {
+    if (!transactionsDialog) return;
+    setTransactionsLoading(true);
+    fetch(`/api/admin/revenue/transactions?month=${transactionsDialog.month}`)
+      .then((res) => (res.ok ? res.json() : { transactions: [] }))
+      .then((data: { transactions?: RevenueTransaction[] }) => {
+        setTransactions(data.transactions ?? []);
+      })
+      .catch(() => setTransactions([]))
+      .finally(() => setTransactionsLoading(false));
+  }, [transactionsDialog]);
 
   // Fetch installs (from users with installDate)
   useEffect(() => {
@@ -261,7 +282,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Revenue Overview</CardTitle>
-          <CardDescription>Track income and forecasted growth</CardDescription>
+          <CardDescription>Track income and forecasted growth • Click amounts to view transactions</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-6 sm:grid-cols-3">
@@ -269,29 +290,130 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
               <p className="text-sm font-medium text-muted-foreground mb-2">
                 {revenue.lastMonthName} Revenue
               </p>
-              <p className="text-3xl font-bold text-foreground">
-                ${revenue.lastMonthRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  setTransactionsDialog({ month: "last", monthName: revenue.lastMonthName })
+                }
+                className="text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+              >
+                ${revenue.lastMonthRevenue.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </button>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">
                 {revenue.thisMonthName} Revenue
               </p>
-              <p className="text-3xl font-bold text-foreground">
-                ${revenue.thisMonthRevenue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  setTransactionsDialog({ month: "this", monthName: revenue.thisMonthName })
+                }
+                className="text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+              >
+                ${revenue.thisMonthRevenue.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </button>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">
                 {revenue.nextMonthName} Forecast
               </p>
-              <p className="text-3xl font-bold text-green-600 dark:text-green-500">
-                ${revenue.nextMonthForecast.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  setTransactionsDialog({ month: "next", monthName: revenue.nextMonthName })
+                }
+                className="text-3xl font-bold text-green-600 dark:text-green-500 hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+              >
+                ${revenue.nextMonthForecast.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </button>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Transactions Dialog */}
+      <Dialog
+        open={!!transactionsDialog}
+        onOpenChange={(open) => !open && setTransactionsDialog(null)}
+      >
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {transactionsDialog?.monthName ?? ""} Transactions
+            </DialogTitle>
+            <DialogDescription>
+              Incoming transactions that account for the total displayed
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
+            {transactionsLoading ? (
+              <div className="flex justify-center py-2">
+                <LoadingAnimation size="lg" className="!h-32 !w-32" />
+              </div>
+            ) : transactions.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">No transactions</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-9">Type</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transactions.map((t, i) => (
+                    <TableRow key={`${t.date}-${t.customerName}-${t.amount}-${i}`}>
+                      <TableCell>
+                        {t.type === "subscription" ? (
+                          <Repeat
+                            className="h-4 w-4 text-muted-foreground"
+                            title="Subscription"
+                            aria-label="Subscription"
+                          />
+                        ) : (
+                          <FileText
+                            className="h-4 w-4 text-muted-foreground"
+                            title="One-off invoice"
+                            aria-label="One-off invoice"
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">{t.customerName}</TableCell>
+                      <TableCell>
+                        {(() => {
+                          const d = new Date((t.dateTimestamp ?? 0) * 1000);
+                          const y = d.getUTCFullYear();
+                          const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+                          const day = String(d.getUTCDate()).padStart(2, "0");
+                          return `${y}-${m}-${day}`;
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        ${t.amount.toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Install Calendar */}
       <Card>
