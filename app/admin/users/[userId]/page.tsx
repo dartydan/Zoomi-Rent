@@ -9,12 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink, Wrench, CreditCard, CalendarClock, Plus, LogIn, PackageX } from "lucide-react";
+import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink, Wrench, CreditCard, CalendarClock, Plus, LogIn, PackageX, Trash2 } from "lucide-react";
 import type { InstallInfo, InstallRecord } from "@/lib/install";
 import type { Unit } from "@/lib/unit";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
+import { estDateTimeToISO } from "@/lib/utils";
+import { TimeSelect, timeToNearestOption } from "@/components/TimeSelect";
 import {
   Dialog,
   DialogContent,
@@ -81,7 +83,9 @@ export default function AdminUserInstallPage() {
   const [installDialogOpen, setInstallDialogOpen] = useState(false);
   const [installDialogEditId, setInstallDialogEditId] = useState<string | null>(null);
   const [installDate, setInstallDate] = useState("");
+  const [installTime, setInstallTime] = useState("08:00");
   const [uninstallDate, setUninstallDate] = useState("");
+  const [uninstallTime, setUninstallTime] = useState("08:00");
   const [installStreet, setInstallStreet] = useState("");
   const [installCity, setInstallCity] = useState("");
   const [installState, setInstallState] = useState("");
@@ -112,6 +116,7 @@ export default function AdminUserInstallPage() {
   const [assignUnitLoading, setAssignUnitLoading] = useState(false);
   const [assigningUnitId, setAssigningUnitId] = useState<string | null>(null);
   const [uninstallLoading, setUninstallLoading] = useState(false);
+  const [deleteInstallLoading, setDeleteInstallLoading] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [editedNameValue, setEditedNameValue] = useState("");
   const [nameClickCaretIndex, setNameClickCaretIndex] = useState(0);
@@ -296,8 +301,34 @@ export default function AdminUserInstallPage() {
     if (editId !== null) {
       const rec = installs.find((r) => r.id === editId);
       if (rec) {
-        setInstallDate(rec.installDate ? rec.installDate.slice(0, 10) : "");
-        setUninstallDate(rec.uninstallDate ? rec.uninstallDate.slice(0, 10) : "");
+        const instDt = rec.installDate ?? "";
+        const uninstDt = rec.uninstallDate ?? "";
+        setInstallDate(instDt ? instDt.slice(0, 10) : "");
+        setInstallTime(
+          instDt && instDt.includes("T") && instDt.length >= 16 && !/^\d{4}-\d{2}-\d{2}T12:00:00(\.000)?Z$/.test(instDt.trim())
+            ? timeToNearestOption(
+                (() => {
+                  const parts = new Intl.DateTimeFormat("en-CA", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: EST }).formatToParts(new Date(instDt));
+                  const hour = parts.find((p) => p.type === "hour")?.value ?? "09";
+                  const minute = parts.find((p) => p.type === "minute")?.value ?? "00";
+                  return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
+                })()
+              )
+            : "08:00"
+        );
+        setUninstallDate(uninstDt ? uninstDt.slice(0, 10) : "");
+        setUninstallTime(
+          uninstDt && uninstDt.includes("T") && uninstDt.length >= 16 && !/^\d{4}-\d{2}-\d{2}T12:00:00(\.000)?Z$/.test(uninstDt.trim())
+            ? timeToNearestOption(
+                (() => {
+                  const parts = new Intl.DateTimeFormat("en-CA", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: EST }).formatToParts(new Date(uninstDt));
+                  const hour = parts.find((p) => p.type === "hour")?.value ?? "09";
+                  const minute = parts.find((p) => p.type === "minute")?.value ?? "00";
+                  return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
+                })()
+              )
+            : "08:00"
+        );
         const parsed = parseInstallAddress(rec.installAddress ?? "");
         setInstallStreet(parsed.street);
         setInstallCity(parsed.city);
@@ -312,7 +343,9 @@ export default function AdminUserInstallPage() {
       }
     } else {
       setInstallDate("");
+      setInstallTime("08:00");
       setUninstallDate("");
+      setUninstallTime("08:00");
       setInstallStreet("");
       setInstallCity("");
       setInstallState("");
@@ -332,6 +365,40 @@ export default function AdminUserInstallPage() {
     setInstallDialogEditId(null);
   }
 
+  async function handleDeleteInstall() {
+    if (!installDialogEditId || !userId) return;
+    if (!confirm("Delete this install record? This cannot be undone.")) return;
+    setDeleteInstallLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/install?installId=${encodeURIComponent(installDialogEditId)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error((j as { error?: string }).error ?? "Failed to delete");
+      }
+      const updated = (await res.json()) as { installs?: InstallRecord[] };
+      setInstalls(Array.isArray(updated.installs) ? updated.installs : []);
+      const refetch = await fetch(`/api/admin/users/${userId}/install`);
+      if (refetch.ok) {
+        const json = (await refetch.json()) as InstallInfo & { installs?: InstallRecord[] };
+        setData(json);
+        setInstalls(Array.isArray(json.installs) ? json.installs : []);
+      }
+      fetch(`/api/admin/users/${userId}/timeline`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((timelineJson) => {
+          if (timelineJson) setTimeline(timelineJson);
+        })
+        .catch(() => {});
+      closeInstallDialog();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete");
+    } finally {
+      setDeleteInstallLoading(false);
+    }
+  }
+
   async function handleCardSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -340,8 +407,10 @@ export default function AdminUserInstallPage() {
       const first = installs[0];
       const formData = new FormData();
       formData.append("installId", first?.id ?? "new");
-      formData.append("installDate", first?.installDate ?? "");
-      formData.append("uninstallDate", first?.uninstallDate ?? "");
+      const instDt = first?.installDate ?? "";
+      const uninstDt = first?.uninstallDate ?? "";
+      formData.append("installDate", instDt ? (instDt.includes("T") ? instDt : `${instDt.slice(0, 10)}T08:00:00`) : "");
+      formData.append("uninstallDate", uninstDt ? (uninstDt.includes("T") ? uninstDt : `${uninstDt.slice(0, 10)}T08:00:00`) : "");
       formData.append(
         "installAddress",
         combineInstallAddress({
@@ -406,8 +475,14 @@ export default function AdminUserInstallPage() {
     try {
       const formData = new FormData();
       formData.append("installId", installDialogEditId ?? "new");
-      formData.append("installDate", installDate || "");
-      formData.append("uninstallDate", uninstallDate || "");
+      const instDt = installDate
+        ? estDateTimeToISO(installDate, (installTime || "08:00").slice(0, 5))
+        : "";
+      const uninstDt = uninstallDate
+        ? estDateTimeToISO(uninstallDate, (uninstallTime || "08:00").slice(0, 5))
+        : "";
+      formData.append("installDate", instDt);
+      formData.append("uninstallDate", uninstallDate ? uninstDt : "");
       formData.append(
         "installAddress",
         combineInstallAddress({
@@ -627,7 +702,7 @@ export default function AdminUserInstallPage() {
       <div className="min-w-0 space-y-6">
       {loading ? (
         <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-border bg-muted/30 p-8">
-          <LoadingAnimation size="lg" />
+          <LoadingAnimation />
         </div>
       ) : error && !data && !customerProfile ? (
         <Card>
@@ -915,9 +990,18 @@ export default function AdminUserInstallPage() {
                       >
                         <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                         {parseDateForDisplay(rec.installDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST })}
-                        <span className="text-muted-foreground">–</span>
+                        {rec.installDate?.includes("T") && rec.installDate.length >= 16 && !/^\d{4}-\d{2}-\d{2}T12:00:00(\.000)?Z$/.test(rec.installDate.trim()) && (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            {parseDateForDisplay(rec.installDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: EST })}
+                          </span>
+                        )}
+                        <span className="text-muted-foreground"> – </span>
                         {rec.uninstallDate
-                          ? parseDateForDisplay(rec.uninstallDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST })
+                          ? parseDateForDisplay(rec.uninstallDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST }) +
+                            (rec.uninstallDate?.includes("T") && rec.uninstallDate.length >= 16 && !/^\d{4}-\d{2}-\d{2}T12:00:00(\.000)?Z$/.test(rec.uninstallDate.trim())
+                              ? " " + parseDateForDisplay(rec.uninstallDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: EST })
+                              : "")
                           : "—"}
                       </button>
                     ))}
@@ -1138,7 +1222,7 @@ export default function AdminUserInstallPage() {
           <DialogHeader>
             <DialogTitle>{installDialogEditId === null ? "Add install" : "Edit install"}</DialogTitle>
             <DialogDescription>
-              {installDialogEditId === null ? "Install and uninstall dates." : "Install and uninstall dates, address, notes, photos, and contracts. Files are stored in Google Drive."}
+              {installDialogEditId === null ? "Install and uninstall dates." : "Install and uninstall dates, notes, photos, and contracts. Files are stored in Google Drive."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleInstallSubmit} className="space-y-4">
@@ -1150,46 +1234,43 @@ export default function AdminUserInstallPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="install-dialog-install-date">Install date</Label>
-                <Input
-                  id="install-dialog-install-date"
-                  type="date"
-                  value={installDate ? installDate.slice(0, 10) : ""}
-                  onChange={(e) => setInstallDate(e.target.value || "")}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="install-dialog-install-date"
+                    type="date"
+                    value={installDate ? installDate.slice(0, 10) : ""}
+                    onChange={(e) => setInstallDate(e.target.value || "")}
+                    className="flex-1"
+                  />
+                  <TimeSelect
+                    id="install-dialog-install-time"
+                    value={installTime}
+                    onChange={setInstallTime}
+                    className="h-9 min-w-[8.5rem] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="install-dialog-uninstall-date">Uninstall date</Label>
-                <Input
-                  id="install-dialog-uninstall-date"
-                  type="date"
-                  value={uninstallDate ? uninstallDate.slice(0, 10) : ""}
-                  onChange={(e) => setUninstallDate(e.target.value || "")}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="install-dialog-uninstall-date"
+                    type="date"
+                    value={uninstallDate ? uninstallDate.slice(0, 10) : ""}
+                    onChange={(e) => setUninstallDate(e.target.value || "")}
+                    className="flex-1"
+                  />
+                  <TimeSelect
+                    id="install-dialog-uninstall-time"
+                    value={uninstallTime}
+                    onChange={setUninstallTime}
+                    className="h-9 min-w-[8.5rem] rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                  />
+                </div>
               </div>
             </div>
             {installDialogEditId !== null && (
             <>
-            <div className="space-y-2">
-              <Label htmlFor="install-dialog-address">Address</Label>
-              <AddressAutocomplete
-                id="install-dialog-address"
-                value={combineInstallAddress({ street: installStreet, city: installCity, state: installState, zip: installZip })}
-                onChange={(v) => {
-                  const parsed = parseInstallAddress(v);
-                  setInstallStreet(parsed.street);
-                  setInstallCity(parsed.city);
-                  setInstallState(parsed.state);
-                  setInstallZip(parsed.zip);
-                }}
-                onPlaceSelect={(parts) => {
-                  setInstallStreet(parts.street);
-                  setInstallCity(parts.city);
-                  setInstallState(parts.state);
-                  setInstallZip(parts.zip);
-                }}
-                placeholder="Street address"
-              />
-            </div>
             <div className="space-y-2">
               <Label htmlFor="install-dialog-notes">Notes</Label>
               <textarea
@@ -1270,6 +1351,22 @@ export default function AdminUserInstallPage() {
             </>
             )}
             <DialogFooter>
+              {installDialogEditId !== null && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="mr-auto"
+                  disabled={saving || deleteInstallLoading}
+                  onClick={handleDeleteInstall}
+                >
+                  {deleteInstallLoading ? "Deleting…" : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-1.5" />
+                      Delete
+                    </>
+                  )}
+                </Button>
+              )}
               <Button type="button" variant="outline" onClick={closeInstallDialog}>
                 Cancel
               </Button>
@@ -1410,7 +1507,7 @@ export default function AdminUserInstallPage() {
               </div>
             ) : (
               <div className="flex justify-center py-4">
-                <LoadingAnimation className="h-32 w-32" />
+                <LoadingAnimation />
               </div>
             )}
           </CardContent>
@@ -1428,7 +1525,7 @@ export default function AdminUserInstallPage() {
           </DialogHeader>
           {assignUnitLoading ? (
             <div className="flex justify-center py-8">
-              <LoadingAnimation size="lg" />
+              <LoadingAnimation />
             </div>
           ) : availableUnits.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4">

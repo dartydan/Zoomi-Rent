@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { AdminRevenueData, RevenueTransaction } from "@/lib/admin-revenue";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,8 +16,10 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, User, Mail, Clock, Package, CheckCircle, Repeat, FileText } from "lucide-react";
+import { ChevronLeft, ChevronRight, User, Mail, Clock, Package, CheckCircle, Repeat, FileText, ExternalLink, Pencil } from "lucide-react";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
+import { estDateTimeToISO } from "@/lib/utils";
+import { TimeSelect, timeToNearestOption } from "@/components/TimeSelect";
 import { CustomSelect } from "@/components/ui/custom-select";
 import {
   Dialog,
@@ -34,8 +36,8 @@ type Install = {
   address: string;
   date: Date;
   time: string;
-  units: string;
-  status: "scheduled" | "pending";
+  unitId: string | null; // Connected unit ID
+  status: "scheduled" | "installed";
 };
 
 type Customer = {
@@ -56,7 +58,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [isNewCustomer, setIsNewCustomer] = useState(false);
-  const [selectedTime, setSelectedTime] = useState<string>("");
+  const [selectedTime, setSelectedTime] = useState<string>("08:00");
   const [selectedUnits, setSelectedUnits] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("pending");
 
@@ -66,6 +68,23 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
   } | null>(null);
   const [transactions, setTransactions] = useState<RevenueTransaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
+
+  const [editingInstallDate, setEditingInstallDate] = useState(false);
+  const [editingInstallTime, setEditingInstallTime] = useState(false);
+  const [editDateValue, setEditDateValue] = useState("");
+  const [editTimeValue, setEditTimeValue] = useState("");
+  const [installDateSaving, setInstallDateSaving] = useState(false);
+  const editDateValueRef = useRef(editDateValue);
+  const editTimeValueRef = useRef(editTimeValue);
+  editDateValueRef.current = editDateValue;
+  editTimeValueRef.current = editTimeValue;
+
+  useEffect(() => {
+    if (!selectedInstall) {
+      setEditingInstallDate(false);
+      setEditingInstallTime(false);
+    }
+  }, [selectedInstall]);
 
   // Fetch transactions when dialog opens
   useEffect(() => {
@@ -80,28 +99,43 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
       .finally(() => setTransactionsLoading(false));
   }, [transactionsDialog]);
 
-  // Fetch installs (from users with installDate)
+  // Fetch installs (from users with installDate) and units (for assigned unit IDs)
   useEffect(() => {
     let cancelled = false;
     async function fetchInstalls() {
       setInstallsLoading(true);
       try {
-        const res = await fetch("/api/admin/users");
-        if (!res.ok) throw new Error("Failed to load");
-        const data = (await res.json()) as { users: Array<{ id: string; firstName: string | null; lastName: string | null; installDate: string | null; installAddress?: string | null; address?: string | null }> };
-        const users = data.users ?? [];
+        const [usersRes, unitsRes] = await Promise.all([
+          fetch("/api/admin/users"),
+          fetch("/api/admin/units"),
+        ]);
+        if (!usersRes.ok) throw new Error("Failed to load");
+        const usersData = (await usersRes.json()) as { users: Array<{ id: string; firstName: string | null; lastName: string | null; installDate: string | null; installAddress?: string | null; address?: string | null }> };
+        const unitsData = (await unitsRes.json()) as { units?: Array<{ id: string; assignedUserId?: string | null }> };
+        const users = usersData.users ?? [];
+        const units = unitsData.units ?? [];
+        const userIdToUnitId = new Map<string, string>();
+        for (const u of units) {
+          if (u.assignedUserId) userIdToUnitId.set(u.assignedUserId, u.id);
+        }
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         const list: Install[] = users
           .filter((u) => u.installDate)
-          .map((u) => ({
-            id: u.id,
-            userId: u.id,
-            customerName: [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || "—",
-            address: u.installAddress ?? u.address ?? "—",
-            date: parseDateForDisplay(u.installDate!),
-            time: "—",
-            units: "—",
-            status: "scheduled" as const,
-          }));
+          .map((u) => {
+            const date = parseDateForDisplay(u.installDate!);
+            const isPast = date < today;
+            return {
+              id: u.id,
+              userId: u.id,
+              customerName: [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || "—",
+              address: u.installAddress ?? u.address ?? "—",
+              date,
+              time: formatInstallTime(u.installDate!),
+              unitId: userIdToUnitId.get(u.id) ?? null,
+              status: (isPast ? "installed" : "scheduled") as const,
+            };
+          });
         if (!cancelled) setInstalls(list);
       } catch {
         if (!cancelled) setInstalls([]);
@@ -115,23 +149,38 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
 
   const refetchInstalls = async () => {
     try {
-      const res = await fetch("/api/admin/users");
-      if (!res.ok) return;
-      const data = (await res.json()) as { users: Array<{ id: string; firstName: string | null; lastName: string | null; installDate: string | null; installAddress?: string | null; address?: string | null }> };
-      const users = data.users ?? [];
+      const [usersRes, unitsRes] = await Promise.all([
+        fetch("/api/admin/users"),
+        fetch("/api/admin/units"),
+      ]);
+      if (!usersRes.ok) return;
+      const usersData = (await usersRes.json()) as { users: Array<{ id: string; firstName: string | null; lastName: string | null; installDate: string | null; installAddress?: string | null; address?: string | null }> };
+      const unitsData = (await unitsRes.json()) as { units?: Array<{ id: string; assignedUserId?: string | null }> };
+      const users = usersData.users ?? [];
+      const units = unitsData.units ?? [];
+      const userIdToUnitId = new Map<string, string>();
+      for (const u of units) {
+        if (u.assignedUserId) userIdToUnitId.set(u.assignedUserId, u.id);
+      }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       const list: Install[] = users
         .filter((u) => u.installDate)
-        .map((u) => ({
-          id: u.id,
-          userId: u.id,
-          customerName: [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || "—",
-          address: u.installAddress ?? u.address ?? "—",
-          date: new Date(u.installDate!),
-          time: "—",
-          units: "—",
-          status: "scheduled" as const,
-        }));
-        setInstalls(list);
+        .map((u) => {
+          const date = parseDateForDisplay(u.installDate!);
+          const isPast = date < today;
+          return {
+            id: u.id,
+            userId: u.id,
+            customerName: [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || "—",
+            address: u.installAddress ?? u.address ?? "—",
+            date,
+            time: formatInstallTime(u.installDate!),
+            unitId: userIdToUnitId.get(u.id) ?? null,
+            status: (isPast ? "installed" : "scheduled") as const,
+          };
+        });
+      setInstalls(list);
     } catch {
       // ignore
     }
@@ -164,42 +213,54 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
     }
   }, [isAddDialogOpen]);
   
-  // Navigation functions for 2-week periods
-  const goToPrevious2Weeks = () => {
+  // Navigation functions for 1-week periods
+  const goToPreviousWeek = () => {
     const newDate = new Date(startDate);
-    newDate.setDate(newDate.getDate() - 14);
+    newDate.setDate(newDate.getDate() - 7);
     setStartDate(newDate);
   };
-  
-  const goToNext2Weeks = () => {
+
+  const goToNextWeek = () => {
     const newDate = new Date(startDate);
-    newDate.setDate(newDate.getDate() + 14);
+    newDate.setDate(newDate.getDate() + 7);
     setStartDate(newDate);
   };
-  
-  // Generate array of 14 days starting from startDate
+
+  // Generate array of 7 days starting from startDate
   const getDaysInView = () => {
     const days = [];
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 7; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
       days.push(date);
     }
     return days;
   };
-  
+
   const daysInView = getDaysInView();
-  
+
   // Get date range for display
   const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 13);
+  endDate.setDate(endDate.getDate() + 6);
   
   const EST = "America/New_York";
   const parseDateForDisplay = (iso: string): Date => {
-    if (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z)?$/.test(iso.trim())) {
-      return new Date(iso.slice(0, 10) + "T12:00:00.000Z");
+    const t = iso.trim();
+    if (!t) return new Date(NaN);
+    if (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z)?$/.test(t)) {
+      return new Date(t.slice(0, 10) + "T12:00:00.000Z");
     }
+    if (t.endsWith("Z") || (t.includes("-") && t.lastIndexOf("-") > 10)) return new Date(t);
+    if (t.includes("T") && t.length >= 16) return new Date(t.length >= 19 ? t.slice(0, 19) : t.slice(0, 16) + ":00");
     return new Date(iso);
+  };
+  const formatInstallTime = (iso: string): string => {
+    const t = iso.trim();
+    if (!t || !t.includes("T") || t.length < 16) return "—";
+    if (/^\d{4}-\d{2}-\d{2}T12:00:00(\.000)?Z$/.test(t)) return "—";
+    const d = parseDateForDisplay(iso);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: EST });
   };
   const formatDateRange = () => {
     const start = startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: EST });
@@ -216,22 +277,11 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
     );
   };
   
-  // Parse time string (e.g. "10:00 AM", "2:30 PM") to minutes since midnight for sorting
-  const timeToMinutes = (timeStr: string): number => {
-    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-    if (!match) return 0;
-    let hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    if (match[3].toUpperCase() === "PM" && hours !== 12) hours += 12;
-    if (match[3].toUpperCase() === "AM" && hours === 12) hours = 0;
-    return hours * 60 + minutes;
-  };
-
-  // Get installs for a specific date, earliest time first
+  // Get installs for a specific date, earliest time first (sort by date.getTime())
   const getInstallsForDate = (date: Date) => {
     return installs
       .filter((install) => isSameDay(install.date, date))
-      .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
   };
 
   return (
@@ -365,7 +415,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
           <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
             {transactionsLoading ? (
               <div className="flex justify-center py-2">
-                <LoadingAnimation size="lg" className="!h-32 !w-32" />
+                <LoadingAnimation />
               </div>
             ) : transactions.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">No transactions</p>
@@ -426,21 +476,21 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
       {/* Install Calendar */}
       <Card>
         <CardHeader className="space-y-1">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base">Installation Schedule</CardTitle>
-              <CardDescription>2-week view • Click on a date to view details</CardDescription>
+              <CardDescription>1-week view • Tap a date to view details</CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <Button
                 variant="outline"
                 size="icon"
-                onClick={goToPrevious2Weeks}
-                aria-label="Previous 2 weeks"
+                onClick={goToPreviousWeek}
+                aria-label="Previous week"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="min-w-[200px] text-center">
+              <div className="min-w-[160px] text-center">
                 <span className="text-sm font-semibold">
                   {formatDateRange()}
                 </span>
@@ -448,8 +498,8 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
               <Button
                 variant="outline"
                 size="icon"
-                onClick={goToNext2Weeks}
-                aria-label="Next 2 weeks"
+                onClick={goToNextWeek}
+                aria-label="Next week"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -457,75 +507,60 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Mobile: list view by date */}
-          <div className="block md:hidden space-y-4">
-            {daysInView.map((date, i) => {
-              const installsForDay = getInstallsForDate(date);
-              const isToday = isSameDay(date, new Date());
-              const dayName = date.toLocaleDateString("en-US", { weekday: "short", timeZone: EST });
-              const dayNum = date.getDate();
-              const monthYear = date.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: EST });
-              return (
-                <div
-                  key={i}
-                  className={`rounded-lg border-2 p-3 ${
-                    isToday ? "border-primary/60 bg-primary/5" : "border-border"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2 pb-2 border-b border-border">
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground uppercase">
-                        {dayName}, {monthYear}
+          {/* Mobile: horizontal scroll week view */}
+          <div className="block md:hidden -mx-1 overflow-x-auto pb-2">
+            <div className="flex gap-2 min-w-min px-1">
+              {daysInView.map((date, i) => {
+                const installsForDay = getInstallsForDate(date);
+                const isToday = isSameDay(date, new Date());
+                const dayName = date.toLocaleDateString("en-US", { weekday: "short", timeZone: EST });
+                const dayNum = date.getDate();
+                const monthShort = date.toLocaleDateString("en-US", { month: "short", timeZone: EST });
+                return (
+                  <div
+                    key={i}
+                    className={`flex-shrink-0 w-[min(140px,calc(50vw-1rem))] rounded-lg border-2 p-2 ${
+                      isToday ? "border-primary/60 bg-primary/5" : "border-border"
+                    }`}
+                  >
+                    <div className="mb-1.5 pb-1.5 border-b border-border">
+                      <div className="text-[10px] font-medium text-muted-foreground uppercase">
+                        {dayName}
                       </div>
-                      <div className={`text-lg font-bold ${isToday ? "text-primary" : "text-foreground"}`}>
-                        {dayNum}
+                      <div className={`text-base font-bold leading-tight ${isToday ? "text-primary" : "text-foreground"}`}>
+                        {dayNum} {monthShort}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedDateForAdd(date);
-                        setIsAddDialogOpen(true);
-                      }}
-                      className="flex items-center justify-center h-8 w-8 rounded-full border-2 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
-                      aria-label="Add installation"
-                    >
-                      <span className="text-sm font-bold">+</span>
-                    </button>
-                  </div>
-                  <ul className="space-y-2">
-                    {installsForDay.length > 0 ? (
-                      installsForDay.map((install, idx) => (
-                        <li key={idx}>
+                    <div className="space-y-1 min-h-[2rem]">
+                      {installsForDay.length > 0 ? (
+                        installsForDay.map((install, idx) => (
                           <button
+                            key={idx}
                             type="button"
                             onClick={() => {
                               setSelectedInstall(install);
                               setIsDialogOpen(true);
                             }}
-                            className="w-full text-left rounded-md p-3 bg-primary/10 hover:bg-primary/20 transition-all border border-transparent hover:border-primary"
+                            className="w-full text-left rounded p-2 min-h-[44px] bg-primary/10 active:bg-primary/20 transition-colors border border-transparent touch-manipulation"
                           >
-                            <div className="font-semibold text-primary text-sm">
+                            <div className="font-semibold text-primary text-xs truncate">
                               {install.time}
                             </div>
-                            <div className="text-foreground text-sm">
+                            <div className="text-foreground text-xs truncate">
                               {install.customerName}
                             </div>
-                            <div className="text-muted-foreground text-xs">
-                              {install.address}
-                            </div>
                           </button>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="text-sm text-muted-foreground py-2">
-                        No installs
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              );
-            })}
+                        ))
+                      ) : (
+                        <div className="text-[10px] text-muted-foreground py-1">
+                          No installs
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Desktop: 7-day calendar grid */}
@@ -559,18 +594,6 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                         {dayNum}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedDateForAdd(date);
-                        setIsAddDialogOpen(true);
-                      }}
-                      className="flex items-center justify-center h-6 w-6 rounded-full border-2 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground transition-all hover:border-primary"
-                      aria-label="Add installation"
-                    >
-                      <span className="text-sm font-bold">+</span>
-                    </button>
                   </div>
                   
                   {/* Installations list */}
@@ -591,9 +614,6 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                           </div>
                           <div className="text-foreground truncate">
                             {install.customerName}
-                          </div>
-                          <div className="text-muted-foreground text-[10px] truncate">
-                            {install.units}
                           </div>
                         </div>
                       ))
@@ -625,7 +645,16 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
       </Card>
       
       {/* Installation Details Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingInstallDate(false);
+            setEditingInstallTime(false);
+          }
+          setIsDialogOpen(open);
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Installation Details</DialogTitle>
@@ -664,31 +693,191 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 <div className="grid gap-3">
                   <div className="flex items-start gap-3">
                     <span className="text-sm font-medium text-muted-foreground min-w-[100px]">Date:</span>
-                    <span className="text-sm text-foreground">
-                      {selectedInstall.date.toLocaleDateString("en-US", {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                        timeZone: EST,
-                      })}
+                    <span className="text-sm text-foreground flex items-center gap-1">
+                      {editingInstallDate ? (
+                        <>
+                          <Input
+                            type="date"
+                            value={editDateValue}
+                            onChange={(e) => setEditDateValue(e.target.value)}
+                            className="h-8 w-40"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                setEditingInstallDate(false);
+                                if (selectedInstall?.userId) {
+                                  setInstallDateSaving(true);
+                                  const installDateStr = estDateTimeToISO(editDateValue, editTimeValue || "08:00");
+                                  fetch(`/api/admin/users/${selectedInstall.userId}/install-date`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ installDate: installDateStr }),
+                                  })
+                                    .then((r) => (r.ok ? refetchInstalls() : Promise.reject()))
+                                    .then(() => {
+                                      const updated = { ...selectedInstall, date: new Date(installDateStr), time: formatInstallTime(installDateStr) };
+                                      setSelectedInstall(updated);
+                                    })
+                                    .catch(() => {})
+                                    .finally(() => setInstallDateSaving(false));
+                                }
+                              }
+                              if (e.key === "Escape") setEditingInstallDate(false);
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
+                            disabled={installDateSaving}
+                            onClick={() => {
+                              setEditingInstallDate(false);
+                              const dateVal = editDateValueRef.current;
+                              const timeVal = editTimeValueRef.current || "08:00";
+                              if (selectedInstall?.userId && dateVal) {
+                                setInstallDateSaving(true);
+                                const installDateStr = estDateTimeToISO(dateVal, timeVal);
+                                fetch(`/api/admin/users/${selectedInstall.userId}/install-date`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ installDate: installDateStr }),
+                                })
+                                  .then((r) => (r.ok ? refetchInstalls() : Promise.reject()))
+                                  .then(() => {
+                                    const updated = { ...selectedInstall, date: new Date(installDateStr), time: formatInstallTime(installDateStr) };
+                                    setSelectedInstall(updated);
+                                  })
+                                  .catch(() => {})
+                                  .finally(() => setInstallDateSaving(false));
+                              }
+                            }}
+                          >
+                            {installDateSaving ? "…" : "Save"}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          {selectedInstall.date.toLocaleDateString("en-US", {
+                            month: "long",
+                            day: "numeric",
+                            year: "numeric",
+                            timeZone: EST,
+                          })}
+                          {selectedInstall.userId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditDateValue(selectedInstall.date.toLocaleDateString("sv-SE", { timeZone: EST }));
+                                setEditTimeValue(selectedInstall.date.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: EST }));
+                                setEditingInstallDate(true);
+                              }}
+                              className="text-muted-foreground hover:text-foreground"
+                              aria-label="Edit date"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </>
+                      )}
                     </span>
                   </div>
                   <div className="flex items-start gap-3">
                     <span className="text-sm font-medium text-muted-foreground min-w-[100px]">Time:</span>
-                    <span className="text-sm text-foreground">{selectedInstall.time}</span>
+                    <span className="text-sm text-foreground flex items-center gap-1">
+                      {editingInstallTime ? (
+                        <>
+                          <TimeSelect
+                            value={editTimeValue}
+                            onChange={setEditTimeValue}
+                            className="h-8 min-w-[8.5rem] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
+                            disabled={installDateSaving}
+                            onClick={() => {
+                              setEditingInstallTime(false);
+                              const datePart = editDateValueRef.current || selectedInstall.date.toLocaleDateString("sv-SE", { timeZone: EST });
+                              const timeVal = editTimeValueRef.current;
+                              if (selectedInstall?.userId && timeVal) {
+                                setInstallDateSaving(true);
+                                const installDateStr = estDateTimeToISO(datePart, timeVal);
+                                fetch(`/api/admin/users/${selectedInstall.userId}/install-date`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ installDate: installDateStr }),
+                                })
+                                  .then((r) => (r.ok ? refetchInstalls() : Promise.reject()))
+                                  .then(() => {
+                                    const updated = { ...selectedInstall, date: new Date(installDateStr), time: formatInstallTime(installDateStr) };
+                                    setSelectedInstall(updated);
+                                  })
+                                  .catch(() => {})
+                                  .finally(() => setInstallDateSaving(false));
+                              }
+                            }}
+                          >
+                            {installDateSaving ? "…" : "Save"}
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          {selectedInstall.time}
+                          {selectedInstall.userId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditDateValue(selectedInstall.date.toLocaleDateString("sv-SE", { timeZone: EST }));
+                                const parts = new Intl.DateTimeFormat("en-CA", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: false,
+                                  timeZone: EST,
+                                }).formatToParts(selectedInstall.date);
+                                const hour = parts.find((p) => p.type === "hour")?.value ?? "09";
+                                const minute = parts.find((p) => p.type === "minute")?.value ?? "00";
+                                setEditTimeValue(timeToNearestOption(`${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`));
+                                setEditingInstallTime(true);
+                              }}
+                              className="text-muted-foreground hover:text-foreground"
+                              aria-label="Edit time"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </span>
                   </div>
                   <div className="flex items-start gap-3">
-                    <span className="text-sm font-medium text-muted-foreground min-w-[100px]">Units:</span>
-                    <span className="text-sm text-foreground">{selectedInstall.units}</span>
+                    <span className="text-sm font-medium text-muted-foreground min-w-[100px]">Unit ID:</span>
+                    <span className="text-sm text-foreground flex items-center gap-1">
+                      {selectedInstall.unitId ? (
+                        <Link
+                          href={`/admin/units/${selectedInstall.unitId}`}
+                          className="flex items-center gap-1 text-foreground"
+                          aria-label={`Go to unit ${selectedInstall.unitId}`}
+                        >
+                          {selectedInstall.unitId}
+                          <ExternalLink className="h-4 w-4" />
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                    </span>
                   </div>
                   <div className="flex items-start gap-3">
                     <span className="text-sm font-medium text-muted-foreground min-w-[100px]">Status:</span>
                     <Badge
                       variant={
-                        selectedInstall.status === "scheduled" ? "secondary" : "outline"
+                        selectedInstall.status === "installed" ? "default" : "secondary"
                       }
                     >
-                      {selectedInstall.status === "scheduled" ? "Scheduled" : "Pending"}
+                      {selectedInstall.status === "installed" ? "Installed" : "Scheduled"}
                     </Badge>
                   </div>
                 </div>
@@ -708,20 +897,9 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                     </Button>
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Close
-                  </Button>
-                  {selectedInstall.userId ? (
-                    <Button asChild>
-                      <Link href={`/admin/users/${selectedInstall.userId}`} onClick={() => setIsDialogOpen(false)}>
-                        Edit Installation
-                      </Link>
-                    </Button>
-                  ) : (
-                    <Button disabled>Edit Installation</Button>
-                  )}
-                </div>
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Close
+                </Button>
               </div>
             </div>
           )}
@@ -736,7 +914,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
           if (!open) {
             setSelectedCustomerId("");
             setIsNewCustomer(false);
-            setSelectedTime("");
+            setSelectedTime("08:00");
             setSelectedUnits("");
             setSelectedStatus("pending");
           }
@@ -791,7 +969,25 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                     alert("Please select a customer.");
                     return;
                   }
-                  const installDateStr = dateVal ? new Date(dateVal).toISOString().split("T")[0] : "";
+                  const timeVal = (formData.get("time") as string) || "08:00";
+                  const hhmmMatch = timeVal.match(/^(\d{1,2}):(\d{2})$/);
+                  let hour = 8, min = 0;
+                  if (hhmmMatch) {
+                    hour = parseInt(hhmmMatch[1], 10);
+                    min = parseInt(hhmmMatch[2], 10);
+                  } else {
+                    const ampmMatch = timeVal.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+                    if (ampmMatch) {
+                      hour = parseInt(ampmMatch[1], 10);
+                      min = parseInt(ampmMatch[2], 10);
+                      if (ampmMatch[3].toUpperCase() === "PM" && hour !== 12) hour += 12;
+                      if (ampmMatch[3].toUpperCase() === "AM" && hour === 12) hour = 0;
+                    }
+                  }
+                  const datePart = (dateVal as string)?.trim().slice(0, 10) ?? "";
+                  const installDateStr = datePart
+                    ? estDateTimeToISO(datePart, `${String(hour).padStart(2, "0")}:${String(min).padStart(2, "0")}`)
+                    : "";
                   const patchForm = new FormData();
                   patchForm.append("installDate", installDateStr);
                   patchForm.append("installAddress", "");
@@ -810,7 +1006,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 setIsAddDialogOpen(false);
                 setSelectedCustomerId("");
                 setIsNewCustomer(false);
-                setSelectedTime("");
+                setSelectedTime("08:00");
                 setSelectedUnits("");
                 setSelectedStatus("pending");
               } catch (error) {
@@ -920,30 +1116,17 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                   <label htmlFor="time" className="text-sm font-medium text-foreground">
                     Time <span className="text-destructive">*</span>
                   </label>
-                  <CustomSelect
-                    id="time"
-                    name="time"
-                    value={selectedTime}
-                    onChange={setSelectedTime}
-                    placeholder="Select time"
-                    icon={<Clock className="h-4 w-4" />}
-                    required
-                    options={[
-                      { value: "8:00 AM", label: "8:00 AM" },
-                      { value: "9:00 AM", label: "9:00 AM" },
-                      { value: "10:00 AM", label: "10:00 AM" },
-                      { value: "11:00 AM", label: "11:00 AM" },
-                      { value: "12:00 PM", label: "12:00 PM" },
-                      { value: "1:00 PM", label: "1:00 PM" },
-                      { value: "2:00 PM", label: "2:00 PM" },
-                      { value: "3:00 PM", label: "3:00 PM" },
-                      { value: "4:00 PM", label: "4:00 PM" },
-                      { value: "5:00 PM", label: "5:00 PM" },
-                      { value: "6:00 PM", label: "6:00 PM" },
-                      { value: "7:00 PM", label: "7:00 PM" },
-                      { value: "8:00 PM", label: "8:00 PM" },
-                    ]}
-                  />
+                  <div className="relative">
+                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <TimeSelect
+                      id="time"
+                      name="time"
+                      value={selectedTime}
+                      onChange={setSelectedTime}
+                      required
+                      className="h-10 w-full rounded-xl border-2 border-input bg-background pl-10 pr-3 py-2 text-sm focus-visible:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 hover:border-primary/50"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="units" className="text-sm font-medium text-foreground">

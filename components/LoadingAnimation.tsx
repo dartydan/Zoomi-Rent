@@ -7,16 +7,17 @@ const LOTTIE_URL = "https://lottie.host/aa47d801-3a7f-4cde-8b25-c323095e55a1/eQM
 
 type LoadingAnimationProps = {
   className?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 };
 
 const sizeClasses = {
   sm: "h-8 w-8",
   md: "h-12 w-12",
   lg: "h-16 w-16",
+  xl: "h-40 w-40",
 };
 
-export function LoadingAnimation({ className, size = "md" }: LoadingAnimationProps) {
+export function LoadingAnimation({ className, size = "xl" }: LoadingAnimationProps) {
   return (
     <div className={cn("flex items-center justify-center", sizeClasses[size], className)} role="status" aria-label="Loading">
       <DotLottieReact src={LOTTIE_URL} loop autoplay className="h-full w-full" />

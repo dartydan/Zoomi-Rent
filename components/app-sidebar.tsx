@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -16,6 +17,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 const CUSTOMER_PORTAL_VIEW_COOKIE = "customer_portal_view";
@@ -28,9 +30,17 @@ export function AppSidebar() {
   const { isSignedIn } = useAuth();
   const { signOut } = useClerk();
   const { user } = useUser();
+  const { setOpenMobile, isMobile } = useSidebar();
   const isDevelopment = process.env.NODE_ENV === "development";
   const isAdminUser = (user?.publicMetadata?.role as string | undefined) === "admin" || (isDevelopment && pathname.startsWith("/admin"));
   const isAdminSection = pathname.startsWith("/admin");
+
+  // Close mobile sidebar when navigation occurs
+  useEffect(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [pathname, isMobile, setOpenMobile]);
 
   function openCustomerPortal() {
     document.cookie = `${CUSTOMER_PORTAL_VIEW_COOKIE}=true; path=/; max-age=60`;

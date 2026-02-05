@@ -229,7 +229,7 @@ export default function PropertyPage() {
         <CardContent className="p-0">
           {loading ? (
             <div className="py-8 flex justify-center">
-              <LoadingAnimation size="md" className="h-96 w-96" />
+              <LoadingAnimation />
             </div>
           ) : (
             <Table className="table-fixed">

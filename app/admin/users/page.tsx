@@ -71,7 +71,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "installed" | "no_install">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "installed" | "upcoming" | "not_scheduled">("all");
 
   const [addCustomerOpen, setAddCustomerOpen] = useState(false);
   const [addFirstName, setAddFirstName] = useState("");
@@ -145,6 +145,9 @@ export default function CustomersPage() {
 
   const displayAddress = (c: Customer) => c.address ?? c.installAddress ?? null;
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const filteredCustomers = customers.filter((customer) => {
     const matchesSearch =
       `${customer.firstName ?? ""} ${customer.lastName ?? ""}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -152,17 +155,30 @@ export default function CustomersPage() {
       (customer.phone ?? "").includes(searchQuery);
 
     const hasInstall = !!customer.installDate;
+    const installDate = customer.installDate ? parseDateForDisplay(customer.installDate) : null;
+    const isInstalled = hasInstall && installDate && installDate < today;
+    const isUpcoming = hasInstall && installDate && installDate >= today;
+    const isNotScheduled = !hasInstall;
     const matchesStatus =
       filterStatus === "all" ||
-      (filterStatus === "installed" && hasInstall) ||
-      (filterStatus === "no_install" && !hasInstall);
+      (filterStatus === "installed" && isInstalled) ||
+      (filterStatus === "upcoming" && isUpcoming) ||
+      (filterStatus === "not_scheduled" && isNotScheduled);
 
     return matchesSearch && matchesStatus;
   });
 
-  const totalCustomers = customers.length;
-  const withInstall = customers.filter((c) => c.installDate).length;
-  const withStripe = customers.filter((c) => c.stripeCustomerId).length;
+  const installedCount = customers.filter((c) => {
+    if (!c.installDate) return false;
+    const d = parseDateForDisplay(c.installDate);
+    return d < today;
+  }).length;
+  const upcomingCount = customers.filter((c) => {
+    if (!c.installDate) return false;
+    const d = parseDateForDisplay(c.installDate);
+    return d >= today;
+  }).length;
+  const notScheduledCount = customers.filter((c) => !c.installDate).length;
 
   function openAddCustomer() {
     setAddFirstName("");
@@ -424,76 +440,81 @@ export default function CustomersPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
+        <Card
+          className={`cursor-pointer transition-colors hover:bg-muted/50 ${filterStatus === "installed" ? "ring-2 ring-primary" : ""}`}
+          onClick={() => setFilterStatus((prev) => (prev === "installed" ? "all" : "installed"))}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setFilterStatus((prev) => (prev === "installed" ? "all" : "installed"));
+            }
+          }}
+        >
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Customers</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Installed</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? "—" : totalCustomers}</div>
+            <div className="text-2xl font-bold text-green-600">{loading ? "—" : installedCount}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`cursor-pointer transition-colors hover:bg-muted/50 ${filterStatus === "upcoming" ? "ring-2 ring-primary" : ""}`}
+          onClick={() => setFilterStatus((prev) => (prev === "upcoming" ? "all" : "upcoming"))}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setFilterStatus((prev) => (prev === "upcoming" ? "all" : "upcoming"));
+            }
+          }}
+        >
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">With install date</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming Installs</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{loading ? "—" : withInstall}</div>
+            <div className="text-2xl font-bold">{loading ? "—" : upcomingCount}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`cursor-pointer transition-colors hover:bg-muted/50 ${filterStatus === "not_scheduled" ? "ring-2 ring-primary" : ""}`}
+          onClick={() => setFilterStatus((prev) => (prev === "not_scheduled" ? "all" : "not_scheduled"))}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setFilterStatus((prev) => (prev === "not_scheduled" ? "all" : "not_scheduled"));
+            }
+          }}
+        >
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Stripe linked</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Not Scheduled</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? "—" : withStripe}</div>
+            <div className="text-2xl font-bold">{loading ? "—" : notScheduledCount}</div>
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name, email, or phone..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={filterStatus === "all" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilterStatus("all")}
-              >
-                All
-              </Button>
-              <Button
-                type="button"
-                variant={filterStatus === "installed" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilterStatus("installed")}
-              >
-                Installed
-              </Button>
-              <Button
-                type="button"
-                variant={filterStatus === "no_install" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilterStatus("no_install")}
-              >
-                No install
-              </Button>
-            </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, or phone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
           </div>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
             <div className="py-8 flex justify-center">
-              <LoadingAnimation size="md" />
+              <LoadingAnimation />
             </div>
           ) : (
             <Table>

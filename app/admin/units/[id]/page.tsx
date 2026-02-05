@@ -257,7 +257,7 @@ export default function UnitDetailsPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
-        <LoadingAnimation size="md" className="h-96 w-96" />
+        <LoadingAnimation />
       </div>
     );
   }
@@ -727,7 +727,7 @@ export default function UnitDetailsPage() {
                 />
               ) : (
                 <div className="flex justify-center py-4">
-                  <LoadingAnimation size="md" />
+                  <LoadingAnimation />
                 </div>
               )}
             </CardContent>

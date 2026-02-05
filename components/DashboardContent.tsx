@@ -216,7 +216,7 @@ export function DashboardContent() {
   if (loading) {
     return (
       <div className="flex min-h-[200px] items-center justify-center">
-        <LoadingAnimation size="lg" />
+        <LoadingAnimation />
       </div>
     );
   }

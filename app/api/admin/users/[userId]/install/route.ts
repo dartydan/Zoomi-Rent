@@ -279,11 +279,20 @@ export async function PATCH(
       }
     }
 
-    const normalizeDateOnly = (s: string) => (s?.trim() ? s.trim().slice(0, 10) : s);
+    const normalizeDateTime = (s: string) => {
+      const t = s?.trim();
+      if (!t) return t;
+      if (t.includes("T")) {
+        if (t.endsWith("Z") || t.includes("-") && t.lastIndexOf("-") > 10) return t;
+        if (t.length >= 19) return t.slice(0, 19);
+        if (t.length >= 16) return t.slice(0, 16) + ":00";
+      }
+      return t.slice(0, 10) + "T12:00:00.000Z";
+    };
     const record: InstallRecord = {
       id: installId === "new" ? crypto.randomUUID() : installId,
-      installDate: normalizeDateOnly(installDate || (installId !== "new" ? existingInstalls.find((r) => r.id === installId)?.installDate ?? "" : "")),
-      uninstallDate: uninstallDate && uninstallDate.trim() ? normalizeDateOnly(uninstallDate.trim()) : undefined,
+      installDate: normalizeDateTime(installDate || (installId !== "new" ? existingInstalls.find((r) => r.id === installId)?.installDate ?? "" : "")),
+      uninstallDate: uninstallDate && uninstallDate.trim() ? normalizeDateTime(uninstallDate.trim()) : undefined,
       installAddress: installAddress?.trim() || undefined,
       notes: notes?.trim() || undefined,
       photoUrls: photoUrls.length ? photoUrls : undefined,
@@ -313,6 +322,57 @@ export async function PATCH(
     console.error("Admin update install error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to save" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ userId: string }> }
+) {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const { userId } = await params;
+    const { searchParams } = new URL(req.url);
+    const installId = searchParams.get("installId")?.trim();
+    if (!installId) {
+      return NextResponse.json({ error: "installId is required" }, { status: 400 });
+    }
+
+    const user = await clerkClient.users.getUser(userId);
+    const existing = (user.publicMetadata?.[INSTALL_METADATA_KEY] ?? {}) as InstallInfo;
+    const existingInstalls: InstallRecord[] =
+      Array.isArray(existing.installs) && existing.installs.length > 0
+        ? existing.installs
+        : existing.installDate
+          ? [{ id: "legacy", installDate: existing.installDate, uninstallDate: undefined, installAddress: existing.installAddress, notes: existing.notes, photoUrls: existing.photoUrls, contractUrls: existing.contractUrls }]
+          : [];
+
+    const installs = existingInstalls.filter((r) => r.id !== installId);
+    const install: InstallInfo = {
+      installs,
+      driveFolderId: existing.driveFolderId,
+      propertyId: existing.propertyId,
+    };
+
+    await clerkClient.users.updateUserMetadata(userId, {
+      publicMetadata: {
+        ...user.publicMetadata,
+        [INSTALL_METADATA_KEY]: install,
+      },
+    });
+
+    return NextResponse.json({ ...install, installs });
+  } catch (err) {
+    console.error("Admin delete install error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to delete" },
       { status: 500 }
     );
   }

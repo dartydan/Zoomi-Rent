@@ -279,7 +279,7 @@ export function GetStartedModal() {
 
         {!loaded ? (
           <div className="flex justify-center py-8">
-            <LoadingAnimation size="md" />
+            <LoadingAnimation />
           </div>
         ) : step === "verify" ? (
           <form onSubmit={handleVerifyCode} className="space-y-4">
