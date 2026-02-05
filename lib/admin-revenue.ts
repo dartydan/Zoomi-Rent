@@ -496,6 +496,24 @@ export async function computeAdminRevenue(): Promise<AdminRevenueData> {
             paymentTs >= nextMonth.start && paymentTs <= nextMonth.end;
           if (inThisMonth) thisMonthExpected += amount;
           if (inNextMonth) nextMonthForecast += amount;
+
+          // When next payment is this month, also add the following period for next month forecast
+          if (inThisMonth && sub.current_period_end && amount > 0) {
+            const periodStart = sub.current_period_start ?? sub.current_period_end;
+            const periodLen =
+              sub.current_period_end && periodStart
+                ? sub.current_period_end - periodStart
+                : 30 * 86400;
+            const nextPeriodEnd = sub.current_period_end + periodLen;
+            const nextAmount = getRecurringAmount();
+            if (
+              nextAmount > 0 &&
+              nextPeriodEnd >= nextMonth.start &&
+              nextPeriodEnd <= nextMonth.end
+            ) {
+              nextMonthForecast += nextAmount;
+            }
+          }
         }
         subHasMore = subList.has_more;
         if (subList.data.length > 0) {
