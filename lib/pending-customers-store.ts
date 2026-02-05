@@ -129,3 +129,11 @@ export async function removePendingByEmail(email: string): Promise<void> {
   const next = list.filter((p) => p.email.toLowerCase() !== normalized);
   if (next.length < list.length) await writePendingCustomers(next);
 }
+
+export async function removePendingById(id: string): Promise<boolean> {
+  const list = await readPendingCustomers();
+  const next = list.filter((p) => p.id !== id);
+  if (next.length >= list.length) return false;
+  await writePendingCustomers(next);
+  return true;
+}

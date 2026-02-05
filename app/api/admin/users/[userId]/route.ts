@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import Stripe from "stripe";
 import { requireAdmin } from "@/lib/admin";
+import { removePendingById } from "@/lib/pending-customers-store";
 
 export const dynamic = "force-dynamic";
 
@@ -120,6 +121,46 @@ export async function PATCH(
     console.error("Admin update user error:", err);
     return NextResponse.json(
       { error: "Failed to update user" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ userId: string }> }
+) {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const { userId } = await params;
+
+    if (userId.startsWith("pending_")) {
+      const pendingId = userId.slice("pending_".length);
+      const removed = await removePendingById(pendingId);
+      if (!removed) {
+        return NextResponse.json({ error: "Pending customer not found" }, { status: 404 });
+      }
+      return NextResponse.json({ deleted: true });
+    }
+
+    const { getUnitByUserId, updateUnit } = await import("@/lib/unit-store");
+    const unit = await getUnitByUserId(userId);
+    if (unit) {
+      await updateUnit({ ...unit, assignedUserId: null });
+    }
+
+    await clerkClient.users.deleteUser(userId);
+
+    return NextResponse.json({ deleted: true });
+  } catch (err) {
+    console.error("Admin delete user error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to delete user" },
       { status: 500 }
     );
   }

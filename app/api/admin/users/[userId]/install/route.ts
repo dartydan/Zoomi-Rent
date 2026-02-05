@@ -10,6 +10,7 @@ import {
   uploadContract,
   isGoogleDriveConfigured,
 } from "@/lib/google-drive";
+import { getActiveSubscriptionProductName } from "@/lib/stripe-subscription";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,7 @@ export async function GET(
           addr?.line1 || addr?.city || addr?.state || addr?.postal_code
             ? [addr.line1, addr.city, addr.state, addr.postal_code].filter(Boolean).join(", ")
             : undefined;
+        const activePlanName = await getActiveSubscriptionProductName(stripe, stripeCustomerId);
         mergedProfile = {
           ...(customerProfile ?? {}),
           firstName,
@@ -112,6 +114,7 @@ export async function GET(
           city: addr?.city ?? undefined,
           state: addr?.state ?? undefined,
           zip: addr?.postal_code ?? undefined,
+          selectedPlan: activePlanName ?? (customerProfile?.selectedPlan as string) ?? undefined,
         };
       } catch {
         mergedProfile = {

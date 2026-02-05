@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -19,10 +20,11 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, UserPlus, Mail, Phone, MapPin, Package, Calendar, Check } from "lucide-react";
+import { Search, UserPlus, Mail, Phone, MapPin, Package, Calendar, Check, ChevronRight, Trash2 } from "lucide-react";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 
@@ -57,6 +59,7 @@ type PendingCustomer = {
 };
 
 export default function CustomersPage() {
+  const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +76,10 @@ export default function CustomersPage() {
   const [addZip, setAddZip] = useState("");
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -337,6 +344,72 @@ export default function CustomersPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!deleting) {
+            if (!open) setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md" onPointerDownOutside={(e) => deleting && e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Delete customer</DialogTitle>
+            <DialogDescription>
+              {deleteTarget && (
+                <>
+                  This will permanently delete{" "}
+                  <span className="font-medium text-foreground">
+                    {[deleteTarget.firstName, deleteTarget.lastName].filter(Boolean).join(" ") || deleteTarget.email || "this customer"}
+                  </span>{" "}
+                  and unassign any unit. This action cannot be undone.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p className="text-sm text-destructive" role="alert">
+              {deleteError}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!deleteTarget) return;
+                setDeleting(true);
+                setDeleteError(null);
+                try {
+                  const res = await fetch(`/api/admin/users/${deleteTarget.id}`, { method: "DELETE" });
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json.error ?? "Failed to delete");
+                  setCustomers((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+                  setDeleteTarget(null);
+                } catch (err) {
+                  setDeleteError(err instanceof Error ? err.message : "Failed to delete");
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {error && (
         <p className="text-sm text-destructive" role="alert">
           {error}
@@ -437,19 +510,30 @@ export default function CustomersPage() {
                   </TableRow>
                 ) : (
                   filteredCustomers.map((customer) => (
-                    <TableRow key={customer.id} className="hover:bg-muted/50">
+                    <TableRow
+                      key={customer.id}
+                      className={`transition-colors ${!customer.isPending ? "cursor-pointer hover:bg-muted" : "hover:bg-muted/50"}`}
+                      role={!customer.isPending ? "button" : undefined}
+                      tabIndex={!customer.isPending ? 0 : undefined}
+                      onClick={
+                        !customer.isPending
+                          ? () => router.push(`/admin/users/${customer.id}`)
+                          : undefined
+                      }
+                      onKeyDown={
+                        !customer.isPending
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                router.push(`/admin/users/${customer.id}`);
+                              }
+                            }
+                          : undefined
+                      }
+                    >
                       <TableCell className="pl-6">
                         <div className="font-medium">
-                          {customer.isPending ? (
-                            [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "—"
-                          ) : (
-                            <Link
-                              href={`/admin/users/${customer.id}`}
-                              className="text-primary hover:underline"
-                            >
-                              {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || "—"}
-                            </Link>
-                          )}
+                          {[customer.firstName, customer.lastName].filter(Boolean).join(" ") || "—"}
                         </div>
                         <div className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                           <MapPin className="h-3 w-3 shrink-0" />
@@ -491,7 +575,11 @@ export default function CustomersPage() {
                         ) : customer.installDate ? (
                           <div className="flex items-center gap-1 text-sm">
                             <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
-                            {customer.installDate}
+                            {new Date(customer.installDate).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
                           </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">Not scheduled</span>
@@ -507,15 +595,25 @@ export default function CustomersPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right pr-6">
-                        {customer.isPending ? (
-                          <span className="text-muted-foreground text-sm">—</span>
-                        ) : (
-                          <Button type="button" variant="ghost" size="sm" asChild>
-                            <Link href={`/admin/users/${customer.id}`}>
-                              View Details
-                            </Link>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              setDeleteError(null);
+                              setDeleteTarget(customer);
+                            }}
+                            aria-label={`Delete ${[customer.firstName, customer.lastName].filter(Boolean).join(" ") || "customer"}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
-                        )}
+                          {!customer.isPending && (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

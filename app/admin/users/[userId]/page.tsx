@@ -13,6 +13,7 @@ import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, Externa
 import type { InstallInfo, InstallRecord } from "@/lib/install";
 import type { Unit } from "@/lib/unit";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import { CustomSelect } from "@/components/ui/custom-select";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import {
   Dialog,
@@ -105,6 +106,10 @@ export default function AdminUserInstallPage() {
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [assignedUnit, setAssignedUnit] = useState<Unit | null>(null);
   const [unitDialogOpen, setUnitDialogOpen] = useState(false);
+  const [assignUnitDialogOpen, setAssignUnitDialogOpen] = useState(false);
+  const [availableUnits, setAvailableUnits] = useState<Unit[]>([]);
+  const [assignUnitLoading, setAssignUnitLoading] = useState(false);
+  const [assigningUnitId, setAssigningUnitId] = useState<string | null>(null);
   const [uninstallLoading, setUninstallLoading] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [editedNameValue, setEditedNameValue] = useState("");
@@ -218,8 +223,20 @@ export default function AdminUserInstallPage() {
     return () => { cancelled = true; };
   }, [userId]);
 
-  // Unit dialog uses embedded washer/dryer from assignedUnit directly
+  function openAssignUnitDialog() {
+    setAssignUnitDialogOpen(true);
+    setAssignUnitLoading(true);
+    fetch("/api/admin/units")
+      .then((res) => (res.ok ? res.json() : { units: [] }))
+      .then((data: { units?: Unit[] }) => {
+        const units = (data.units ?? []).filter((u) => !u.assignedUserId);
+        setAvailableUnits(units);
+      })
+      .catch(() => setAvailableUnits([]))
+      .finally(() => setAssignUnitLoading(false));
+  }
 
+  // Unit dialog uses embedded washer/dryer from assignedUnit directly
   async function refetchAssignedUnit() {
     const res = await fetch(`/api/admin/units?userId=${encodeURIComponent(userId)}`);
     const json = await res.json();
@@ -828,16 +845,20 @@ export default function AdminUserInstallPage() {
             <CardContent>
               <button
                 type="button"
-                onClick={() => assignedUnit && setUnitDialogOpen(true)}
-                disabled={!assignedUnit}
+                onClick={() =>
+                  assignedUnit
+                    ? setUnitDialogOpen(true)
+                    : !userId.startsWith("pending_") && openAssignUnitDialog()
+                }
+                disabled={userId.startsWith("pending_")}
                 className={
                   assignedUnit
                     ? "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-green-600 dark:border-green-500 bg-green-50 dark:bg-green-950/40 px-4 py-3 text-sm font-medium text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 cursor-pointer"
-                    : "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-muted-foreground cursor-default border-dashed"
+                    : "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-4 py-3 text-sm font-medium text-muted-foreground border-dashed hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-muted/30"
                 }
               >
                 {!assignedUnit && <Plus className="h-4 w-4" />}
-                {assignedUnit ? "View unit" : "No unit assigned"}
+                {assignedUnit ? "View unit" : "Add unit"}
               </button>
             </CardContent>
           </Card>
@@ -1357,12 +1378,67 @@ export default function AdminUserInstallPage() {
               </div>
             ) : (
               <div className="flex justify-center py-4">
-                <LoadingAnimation size="sm" />
+                <LoadingAnimation className="h-32 w-32" />
               </div>
             )}
           </CardContent>
         </Card>
       </aside>
+
+      {/* Assign unit dialog */}
+      <Dialog open={assignUnitDialogOpen} onOpenChange={(open) => !open && setAssignUnitDialogOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign unit</DialogTitle>
+            <DialogDescription>
+              Select a unit from the warehouse to assign to this customer.
+            </DialogDescription>
+          </DialogHeader>
+          {assignUnitLoading ? (
+            <div className="flex justify-center py-8">
+              <LoadingAnimation size="lg" />
+            </div>
+          ) : availableUnits.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4">
+              No units available at warehouse. Add units in the Property tab first.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <Label>Unit</Label>
+              <CustomSelect
+                options={availableUnits.map((u) => ({
+                  value: u.id,
+                  label: `${u.id} · ${[u.washer.brand, u.washer.model].filter(Boolean).join(" ") || "—"} / ${[u.dryer.brand, u.dryer.model].filter(Boolean).join(" ") || "—"}`,
+                }))}
+                value=""
+                onChange={async (value) => {
+                  if (!value.trim()) return;
+                  setAssigningUnitId(value);
+                  try {
+                    const res = await fetch(`/api/admin/units/${value}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ assignedUserId: userId }),
+                    });
+                    if (!res.ok) throw new Error("Failed to assign");
+                    await refetchAssignedUnit();
+                    setAssignUnitDialogOpen(false);
+                  } catch {
+                    setError("Failed to assign unit");
+                  } finally {
+                    setAssigningUnitId(null);
+                  }
+                }}
+                placeholder="Select unit"
+                icon={<Wrench className="h-4 w-4" />}
+              />
+              {assigningUnitId && (
+                <p className="text-sm text-muted-foreground">Assigning…</p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Unit info popup */}
       <Dialog open={unitDialogOpen} onOpenChange={(open) => !open && setUnitDialogOpen(false)}>

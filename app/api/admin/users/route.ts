@@ -2,6 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { requireAdmin } from "@/lib/admin";
+import { getActiveSubscriptionProductName } from "@/lib/stripe-subscription";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,11 @@ export async function GET() {
 
     const list = await Promise.all(
       users.map(async (u) => {
-        const install = (u.publicMetadata?.install ?? {}) as { installDate?: string; installAddress?: string };
+        const install = (u.publicMetadata?.install ?? {}) as {
+          installDate?: string;
+          installAddress?: string;
+          installs?: Array<{ installDate: string; installAddress?: string }>;
+        };
         const customerProfile = (u.publicMetadata?.customerProfile ?? {}) as Record<string, unknown>;
         let stripeCustomerId = (u.publicMetadata?.stripeCustomerId as string)?.trim() || null;
 
@@ -45,6 +50,7 @@ export async function GET() {
 
         let hasDefaultPaymentMethod = false;
         let stripeCustomer: Stripe.Customer | null = null;
+        let activePlanName: string | null = null;
         if (stripe && stripeCustomerId) {
           try {
             const timeoutMs = 2000;
@@ -60,6 +66,7 @@ export async function GET() {
               const legacy = stripeCustomer.default_source;
               hasDefaultPaymentMethod = !!(pm ?? legacy);
             }
+            activePlanName = await getActiveSubscriptionProductName(stripe, stripeCustomerId);
           } catch {
             // Timeout, deleted, or invalid; leave hasDefaultPaymentMethod false
           }
@@ -83,11 +90,17 @@ export async function GET() {
           createdAt: u.createdAt,
           stripeCustomerId,
           hasDefaultPaymentMethod,
-          installDate: install.installDate ?? null,
-          installAddress: install.installAddress ?? null,
+          installDate:
+            (Array.isArray(install.installs) && install.installs.length > 0
+              ? install.installs[0].installDate
+              : install.installDate) ?? null,
+          installAddress:
+            (Array.isArray(install.installs) && install.installs.length > 0
+              ? install.installs[0].installAddress
+              : install.installAddress) ?? null,
           phone: fromStripe?.phone ?? (customerProfile.phone as string) ?? null,
           address: stripeAddress ?? (customerProfile.address as string) ?? null,
-          selectedPlan: (customerProfile.selectedPlan as string) ?? null,
+          selectedPlan: activePlanName ?? (customerProfile.selectedPlan as string) ?? null,
         };
       })
     );
