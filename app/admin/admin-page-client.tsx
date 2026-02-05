@@ -133,7 +133,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
               date,
               time: formatInstallTime(u.installDate!),
               unitId: userIdToUnitId.get(u.id) ?? null,
-              status: (isPast ? "installed" : "scheduled") as const,
+              status: isPast ? "installed" : "scheduled",
             };
           });
         if (!cancelled) setInstalls(list);
@@ -177,7 +177,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
             date,
             time: formatInstallTime(u.installDate!),
             unitId: userIdToUnitId.get(u.id) ?? null,
-            status: (isPast ? "installed" : "scheduled") as const,
+            status: isPast ? "installed" : "scheduled",
           };
         });
       setInstalls(list);
