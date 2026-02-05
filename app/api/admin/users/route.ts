@@ -160,7 +160,7 @@ export async function GET() {
 
             list.push({
               id: user.id,
-              email: c.email ?? null,
+              email: c.email!,
               firstName: stripeFirstName,
               lastName: stripeLastName,
               createdAt: user.createdAt,
@@ -171,7 +171,7 @@ export async function GET() {
               phone: c.phone ?? null,
               address: stripeAddress,
               selectedPlan: activePlanName,
-            });
+            } as (typeof list)[number]);
             clerkEmails.add(email);
             clerkStripeIds.add(c.id);
           } catch (err) {

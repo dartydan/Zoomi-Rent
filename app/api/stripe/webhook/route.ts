@@ -96,6 +96,7 @@ export async function POST(req: Request) {
         },
       });
 
+      const stripe = getStripe();
       await stripe.customers.update(customer.id, {
         metadata: { ...customer.metadata, clerk_user_id: user.id },
       });
