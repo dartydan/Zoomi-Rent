@@ -27,10 +27,9 @@ export async function GET(
     const { userId } = await params;
     const user = await clerkClient.users.getUser(userId);
     const install = (user.publicMetadata?.[INSTALL_METADATA_KEY] ?? {}) as InstallInfo;
-    const installDate =
-      (Array.isArray(install.installs) && install.installs.length > 0
-        ? install.installs[0].installDate
-        : install.installDate) ?? null;
+    const firstInstall = Array.isArray(install.installs) && install.installs.length > 0 ? install.installs[0] : null;
+    const installDate = firstInstall?.installDate ?? install.installDate ?? null;
+    const uninstallDate = firstInstall?.uninstallDate ?? null;
 
     const logins: { date: string }[] = [];
     try {
@@ -185,6 +184,7 @@ export async function GET(
 
     return NextResponse.json({
       installDate,
+      uninstallDate,
       payments,
       nextPaymentDate,
       nextPaymentAmount,

@@ -1,94 +1,69 @@
 /**
- * Unit store backed by Airtable.
- * Maps to user's schema: assigned_user_id, current_location, unit_revenue,
- * washer_brand, washer_model, dryer_brand, dryer_model,
- * unit_acquisition_cost, acquisition_location, additional_costs
+ * File-based store for units (washer/dryer pairs).
+ * Use a database in production.
  */
-import { listRecords, getRecordById, createRecord, updateRecord, findRecordByFormula } from "./airtable";
-import type { Unit, MachineInfo } from "./unit";
+import { readFile, writeFile, mkdir } from "fs/promises";
+import path from "path";
+import type { Unit } from "./unit";
 
-function fieldsToUnit(rec: { id: string; fields: Record<string, unknown>; createdTime?: string }): Unit {
-  const f = rec.fields;
-  const createdTime = rec.createdTime ?? null;
-  const unitRevenue = Number(f.unit_revenue ?? 0);
-  const unitCost = Number(f.unit_acquisition_cost ?? 0);
-  const additionalCosts = Number(f.additional_costs ?? 0);
-  const acquisitionLocation = f.acquisition_location != null ? String(f.acquisition_location) : undefined;
+const DATA_DIR = path.join(process.cwd(), "data");
+const FILE_PATH = path.join(DATA_DIR, "units.json");
 
-  return {
-    id: rec.id,
-    assignedUserId: f.assigned_user_id != null ? String(f.assigned_user_id) : null,
-    washer: {
-      model: f.washer_model != null ? String(f.washer_model) : undefined,
-      brand: f.washer_brand != null ? String(f.washer_brand) : undefined,
-      purchaseCost: unitCost,
-      repairCosts: additionalCosts,
-      acquisitionSource: acquisitionLocation,
-      revenueGenerated: unitRevenue / 2,
-      notes: undefined,
-      status: undefined,
-    },
-    dryer: {
-      model: f.dryer_model != null ? String(f.dryer_model) : undefined,
-      brand: f.dryer_brand != null ? String(f.dryer_brand) : undefined,
-      purchaseCost: 0,
-      repairCosts: 0,
-      acquisitionSource: acquisitionLocation,
-      revenueGenerated: unitRevenue / 2,
-      notes: undefined,
-      status: undefined,
-    },
-    createdAt: createdTime ?? new Date().toISOString(),
-    updatedAt: f.updated_at != null ? String(f.updated_at) : createdTime ?? new Date().toISOString(),
-  };
+async function ensureDir() {
+  try {
+    await mkdir(DATA_DIR, { recursive: true });
+  } catch {
+    // ignore
+  }
 }
 
-function unitToFields(u: Unit): Record<string, unknown> {
-  const w = u.washer;
-  const d = u.dryer;
-  const unitCost = w.purchaseCost ?? 0;
-  const additionalCosts = w.repairCosts ?? 0;
-  const unitRevenue = (w.revenueGenerated ?? 0) + (d.revenueGenerated ?? 0);
-  const acquisitionLocation = w.acquisitionSource ?? d.acquisitionSource ?? null;
+async function readUnitsFile(): Promise<Unit[]> {
+  try {
+    await ensureDir();
+    const raw = await readFile(FILE_PATH, "utf-8");
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
 
-  return {
-    assigned_user_id: u.assignedUserId ?? null,
-    current_location: u.assignedUserId ? "" : "Warehouse",
-    unit_revenue: unitRevenue,
-    washer_brand: w.brand ?? null,
-    washer_model: w.model ?? null,
-    dryer_brand: d.brand ?? null,
-    dryer_model: d.model ?? null,
-    unit_acquisition_cost: unitCost,
-    acquisition_location: acquisitionLocation,
-    additional_costs: additionalCosts,
-  };
+async function writeUnitsFile(units: Unit[]): Promise<void> {
+  await ensureDir();
+  await writeFile(FILE_PATH, JSON.stringify(units, null, 2), "utf-8");
 }
 
 export async function readUnits(): Promise<Unit[]> {
-  const records = await listRecords();
-  const units = records.map((r) => fieldsToUnit(r));
+  const units = await readUnitsFile();
   units.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   return units;
 }
 
 export async function getUnitById(id: string): Promise<Unit | null> {
-  const rec = await getRecordById(id);
-  return rec ? fieldsToUnit(rec) : null;
+  const units = await readUnitsFile();
+  return units.find((u) => u.id === id) ?? null;
 }
 
 export async function getUnitByUserId(userId: string): Promise<Unit | null> {
-  const rec = await findRecordByFormula(`{assigned_user_id} = '${userId.replace(/'/g, "\\'")}'`);
-  return rec ? fieldsToUnit(rec) : null;
+  const units = await readUnitsFile();
+  return units.find((u) => u.assignedUserId === userId) ?? null;
 }
 
 export async function createUnit(u: Unit): Promise<void> {
-  const fields = unitToFields(u);
-  const { id } = await createRecord(fields);
-  u.id = id;
+  const units = await readUnitsFile();
+  if (units.some((x) => x.id === u.id)) {
+    throw new Error(`Unit with id ${u.id} already exists`);
+  }
+  units.push(u);
+  await writeUnitsFile(units);
 }
 
 export async function updateUnit(u: Unit): Promise<void> {
-  const fields = unitToFields({ ...u, updatedAt: new Date().toISOString() });
-  await updateRecord(u.id, fields);
+  const units = await readUnitsFile();
+  const idx = units.findIndex((x) => x.id === u.id);
+  if (idx < 0) {
+    throw new Error(`Unit ${u.id} not found`);
+  }
+  units[idx] = { ...u, updatedAt: new Date().toISOString() };
+  await writeUnitsFile(units);
 }

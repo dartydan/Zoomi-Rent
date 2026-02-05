@@ -364,6 +364,29 @@
       opacity: 1;
     }
   }
+
+  @keyframes copiedNotification {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, 4px);
+    }
+    15% {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    75% {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, 4px);
+    }
+  }
+
+  .animate-copied-notification {
+    animation: copiedNotification 2s ease-out forwards;
+  }
   
   /* Custom select dropdown styling */
   select {

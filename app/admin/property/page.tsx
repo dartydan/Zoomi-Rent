@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -11,27 +12,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { CustomSelect } from "@/components/ui/custom-select";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, DollarSign, TrendingUp, User } from "lucide-react";
+import { Plus, TrendingUp, User, Home } from "lucide-react";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
-import type { Unit, MachineInfo, MachineStatus } from "@/lib/unit";
-
-type EditableField = "washer" | "dryer" | "unit";
-type MachineField = keyof MachineInfo;
+import type { Unit, MachineStatus } from "@/lib/unit";
 
 type AdminUser = {
   id: string;
@@ -86,21 +75,14 @@ const DOT_LABELS: Record<DotStatus, string> = {
 };
 
 export default function PropertyPage() {
+  const router = useRouter();
   const [units, setUnits] = useState<Unit[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [infoUnitId, setInfoUnitId] = useState<string | null>(null);
-  const [infoEditingField, setInfoEditingField] = useState<{
-    slot: EditableField;
-    field: MachineField | "acquisition" | "additional";
-  } | null>(null);
-  const inlineInputRef = useRef<HTMLInputElement>(null);
-
   const userById = (id: string) => users.find((u) => u.id === id);
-  const infoUnit = infoUnitId ? units.find((u) => u.id === infoUnitId) : null;
 
   async function patchUnit(
     unitId: string,
@@ -184,7 +166,11 @@ export default function PropertyPage() {
   }
 
   function totalCost(u: Unit) {
-    return (u.washer.purchaseCost ?? 0) + (u.dryer.purchaseCost ?? 0) + (u.washer.repairCosts ?? 0) + (u.dryer.repairCosts ?? 0);
+    const additionalTotal =
+      u.washer.additionalCosts && u.washer.additionalCosts.length > 0
+        ? u.washer.additionalCosts.reduce((s, e) => s + (e.amount ?? 0), 0)
+        : (u.washer.repairCosts ?? 0) + (u.dryer.repairCosts ?? 0);
+    return (u.washer.purchaseCost ?? 0) + (u.dryer.purchaseCost ?? 0) + additionalTotal;
   }
 
   return (
@@ -243,15 +229,15 @@ export default function PropertyPage() {
         <CardContent className="p-0">
           {loading ? (
             <div className="py-8 flex justify-center">
-              <LoadingAnimation size="md" />
+              <LoadingAnimation size="md" className="h-96 w-96" />
             </div>
           ) : (
-            <Table>
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow>
                   <TableHead className="pl-6 w-10" aria-label="Status" />
                   <TableHead className="w-[180px]">ID</TableHead>
-                  <TableHead className="min-w-[140px]">Location</TableHead>
+                  <TableHead className="w-[200px]">Location</TableHead>
                   <TableHead>Washer</TableHead>
                   <TableHead>Dryer</TableHead>
                   <TableHead className="text-right">Total cost</TableHead>
@@ -269,8 +255,20 @@ export default function PropertyPage() {
                   units.map((u) => {
                     const dotStatus = getUnitDotStatus(u, userById);
                     return (
-                      <TableRow key={u.id} className="hover:bg-muted/50">
-                        <TableCell className="pl-6">
+                      <TableRow
+                        key={u.id}
+                        className="transition-colors cursor-pointer hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => router.push(`/admin/units/${u.id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            router.push(`/admin/units/${u.id}`);
+                          }
+                        }}
+                      >
+                        <TableCell className="pl-6" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
@@ -319,29 +317,19 @@ export default function PropertyPage() {
                           </DropdownMenu>
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">
-                          <button
-                            type="button"
-                            onClick={() => setInfoUnitId(u.id)}
-                            className="text-left text-primary hover:underline focus:outline-none focus:underline"
-                          >
-                            {u.id}
-                          </button>
+                          {u.id}
                         </TableCell>
-                        <TableCell className="text-sm">
-                          <CustomSelect
-                            options={[
-                              { value: "", label: "Warehouse" },
-                              ...users.map((usr) => ({ value: usr.id, label: userDisplay(usr) })),
-                            ]}
-                            value={u.assignedUserId ?? ""}
-                            onChange={async (value) => {
-                              await patchUnit(u.id, {
-                                assignedUserId: value.trim() || null,
-                              });
-                            }}
-                            placeholder="Location"
-                            icon={<User className="h-4 w-4" />}
-                          />
+                        <TableCell className="text-sm w-[200px] max-w-[200px] overflow-hidden">
+                          <span className="flex min-w-0 items-center gap-2 truncate" title={u.assignedUserId ? userDisplay(userById(u.assignedUserId) ?? { id: u.assignedUserId, email: null, firstName: null, lastName: null }) : "Warehouse"}>
+                            {u.assignedUserId ? (
+                              <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            ) : (
+                              <Home className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            )}
+                            <span className="truncate">
+                              {u.assignedUserId ? userDisplay(userById(u.assignedUserId) ?? { id: u.assignedUserId, email: null, firstName: null, lastName: null }) : "Warehouse"}
+                            </span>
+                          </span>
                         </TableCell>
                         <TableCell className="text-sm max-w-[160px]">
                           <span className="truncate block" title={[u.washer.brand, u.washer.model].filter(Boolean).join(" ") || "—"}>
@@ -372,294 +360,6 @@ export default function PropertyPage() {
         </CardContent>
       </Card>
 
-      <Dialog
-        open={!!infoUnitId}
-        onOpenChange={(open) => {
-          if (!open) {
-            setInfoUnitId(null);
-            setInfoEditingField(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-lg">
-          {infoUnit && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Unit details</DialogTitle>
-                <DialogDescription className="font-mono text-xs break-all">{infoUnit.id}</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Location</p>
-                  <CustomSelect
-                    options={[
-                      { value: "", label: "Warehouse" },
-                      ...users.map((usr) => ({ value: usr.id, label: userDisplay(usr) })),
-                    ]}
-                    value={infoUnit.assignedUserId ?? ""}
-                    onChange={async (value) => {
-                      await patchUnit(infoUnit.id, {
-                        assignedUserId: value.trim() || null,
-                      });
-                      await load();
-                    }}
-                    placeholder="Location"
-                    icon={<User className="h-4 w-4" />}
-                  />
-                </div>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Unit costs</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-0 space-y-2">
-                    <EditableUnitCostField
-                      unit={infoUnit}
-                      field="acquisition"
-                      formatCurrency={formatCurrency}
-                      patchUnit={patchUnit}
-                      infoEditingField={infoEditingField}
-                      setInfoEditingField={setInfoEditingField}
-                      inlineInputRef={inlineInputRef}
-                    />
-                    <EditableUnitCostField
-                      unit={infoUnit}
-                      field="additional"
-                      formatCurrency={formatCurrency}
-                      patchUnit={patchUnit}
-                      infoEditingField={infoEditingField}
-                      setInfoEditingField={setInfoEditingField}
-                      inlineInputRef={inlineInputRef}
-                    />
-                    <EditableMachineField
-                      unit={infoUnit}
-                      slot="washer"
-                      field="acquisitionSource"
-                      formatCurrency={formatCurrency}
-                      patchUnit={patchUnit}
-                      infoEditingField={infoEditingField}
-                      setInfoEditingField={setInfoEditingField}
-                      inlineInputRef={inlineInputRef}
-                    />
-                  </CardContent>
-                </Card>
-                <div className="grid grid-cols-2 gap-4">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Washer</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-2">
-                      <EditableMachineField
-                        unit={infoUnit}
-                        slot="washer"
-                        field="brand"
-                        formatCurrency={formatCurrency}
-                        patchUnit={patchUnit}
-                        infoEditingField={infoEditingField}
-                        setInfoEditingField={setInfoEditingField}
-                        inlineInputRef={inlineInputRef}
-                      />
-                      <EditableMachineField
-                        unit={infoUnit}
-                        slot="washer"
-                        field="model"
-                        formatCurrency={formatCurrency}
-                        patchUnit={patchUnit}
-                        infoEditingField={infoEditingField}
-                        setInfoEditingField={setInfoEditingField}
-                        inlineInputRef={inlineInputRef}
-                      />
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground">Revenue</p>
-                        <p className="text-sm">{formatCurrency(infoUnit.washer.revenueGenerated ?? 0)}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Dryer</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-2">
-                      <EditableMachineField
-                        unit={infoUnit}
-                        slot="dryer"
-                        field="brand"
-                        formatCurrency={formatCurrency}
-                        patchUnit={patchUnit}
-                        infoEditingField={infoEditingField}
-                        setInfoEditingField={setInfoEditingField}
-                        inlineInputRef={inlineInputRef}
-                      />
-                      <EditableMachineField
-                        unit={infoUnit}
-                        slot="dryer"
-                        field="model"
-                        formatCurrency={formatCurrency}
-                        patchUnit={patchUnit}
-                        infoEditingField={infoEditingField}
-                        setInfoEditingField={setInfoEditingField}
-                        inlineInputRef={inlineInputRef}
-                      />
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground">Revenue</p>
-                        <p className="text-sm">{formatCurrency(infoUnit.dryer.revenueGenerated ?? 0)}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-              <div className="flex justify-end">
-                <Button type="button" variant="outline" onClick={() => { setInfoUnitId(null); setInfoEditingField(null); }}>
-                  Close
-                </Button>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function EditableUnitCostField({
-  unit,
-  field,
-  formatCurrency,
-  patchUnit,
-  infoEditingField,
-  setInfoEditingField,
-  inlineInputRef,
-}: {
-  unit: Unit;
-  field: "acquisition" | "additional";
-  formatCurrency: (n: number) => string;
-  patchUnit: (id: string, p: { washer?: Partial<MachineInfo>; dryer?: Partial<MachineInfo> }) => Promise<Unit | null>;
-  infoEditingField: { slot: EditableField; field: MachineField | "acquisition" | "additional" } | null;
-  setInfoEditingField: (f: { slot: EditableField; field: MachineField | "acquisition" | "additional" } | null) => void;
-  inlineInputRef: React.RefObject<HTMLInputElement>;
-}) {
-  const value = field === "acquisition" ? (unit.washer.purchaseCost ?? 0) : (unit.washer.repairCosts ?? 0);
-  const isEditing = infoEditingField?.slot === "unit" && infoEditingField?.field === field;
-
-  const handleSave = (n: number) => {
-    if (!Number.isNaN(n) && n >= 0) {
-      if (field === "acquisition") {
-        patchUnit(unit.id, { washer: { purchaseCost: n }, dryer: { purchaseCost: 0 } });
-      } else {
-        patchUnit(unit.id, { washer: { repairCosts: n }, dryer: { repairCosts: 0 } });
-      }
-    }
-    setInfoEditingField(null);
-  };
-
-  return (
-    <div>
-      <p className="text-xs font-medium text-muted-foreground">
-        {field === "acquisition" ? "Acquisition cost" : "Additional costs"}
-      </p>
-      {isEditing ? (
-        <Input
-          ref={inlineInputRef}
-          type="number"
-          min={0}
-          step={0.01}
-          className="h-8 mt-0.5"
-          defaultValue={value}
-          onBlur={(e) => handleSave(parseFloat(e.target.value))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleSave(parseFloat((e.target as HTMLInputElement).value));
-            if (e.key === "Escape") setInfoEditingField(null);
-          }}
-          autoFocus
-        />
-      ) : (
-        <button
-          type="button"
-          className="text-sm text-left hover:bg-muted rounded px-2 py-1 -mx-2 block w-full"
-          onClick={() => setInfoEditingField({ slot: "unit", field })}
-        >
-          {formatCurrency(value)}
-        </button>
-      )}
-    </div>
-  );
-}
-
-function EditableMachineField({
-  unit,
-  slot,
-  field,
-  formatCurrency,
-  patchUnit,
-  infoEditingField,
-  setInfoEditingField,
-  inlineInputRef,
-  format,
-}: {
-  unit: Unit;
-  slot: "washer" | "dryer";
-  field: MachineField;
-  formatCurrency: (n: number) => string;
-  patchUnit: (id: string, p: { washer?: Partial<MachineInfo>; dryer?: Partial<MachineInfo> }) => Promise<Unit | null>;
-  infoEditingField: { slot: EditableField; field: MachineField | "acquisition" | "additional" } | null;
-  setInfoEditingField: (f: { slot: EditableField; field: MachineField | "acquisition" | "additional" } | null) => void;
-  inlineInputRef: React.RefObject<HTMLInputElement>;
-  format?: "currency";
-}) {
-  const machine = unit[slot];
-  const value = machine[field];
-  const isEditing = infoEditingField?.slot === slot && infoEditingField?.field === field;
-
-  const displayValue =
-    field === "purchaseCost" || field === "repairCosts"
-      ? formatCurrency((value as number) ?? 0)
-      : (value as string | undefined) ?? "—";
-
-  const handleSave = (v: string | number) => {
-    if (field === "purchaseCost" || field === "repairCosts") {
-      const n = typeof v === "string" ? parseFloat(v) : v;
-      if (!Number.isNaN(n) && n >= 0) {
-        patchUnit(unit.id, { [slot]: { [field]: n } });
-      }
-    } else {
-      const s = typeof v === "string" ? v.trim() : String(v).trim();
-      patchUnit(unit.id, { [slot]: { [field]: s || undefined } });
-    }
-    setInfoEditingField(null);
-  };
-
-  return (
-    <div>
-      <p className="text-xs font-medium text-muted-foreground capitalize">{field.replace(/([A-Z])/g, " $1").trim()}</p>
-      {isEditing ? (
-        <Input
-          ref={inlineInputRef}
-          type={format === "currency" ? "number" : "text"}
-          min={format === "currency" ? 0 : undefined}
-          step={format === "currency" ? 0.01 : undefined}
-          className="h-8 mt-0.5"
-          defaultValue={field === "purchaseCost" || field === "repairCosts" ? (value as number) ?? 0 : (value as string) ?? ""}
-          onBlur={(e) => {
-            if (format === "currency") handleSave(parseFloat(e.target.value));
-            else handleSave(e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              if (format === "currency") handleSave(parseFloat((e.target as HTMLInputElement).value));
-              else handleSave((e.target as HTMLInputElement).value);
-            }
-            if (e.key === "Escape") setInfoEditingField(null);
-          }}
-          autoFocus
-        />
-      ) : (
-        <button
-          type="button"
-          className="text-sm text-left hover:bg-muted rounded px-2 py-1 -mx-2 block w-full"
-          onClick={() => setInfoEditingField({ slot, field })}
-        >
-          {displayValue}
-        </button>
-      )}
     </div>
   );
 }

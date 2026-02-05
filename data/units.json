@@ -1,0 +1,35 @@
+[
+  {
+    "id": "8febeb88-50f8-425e-ac04-0e5cc1125193",
+    "assignedUserId": "user_38uryi2rcb7oHXcAaIjgDF8Sjgp",
+    "washer": {
+      "purchaseCost": 200,
+      "repairCosts": 0,
+      "revenueGenerated": 0,
+      "acquisitionSource": "Marion, IN",
+      "brand": "Whirlpool",
+      "additionalCosts": [
+        {
+          "amount": 22.99,
+          "description": "Hoses",
+          "date": "2026-02-05T00:00:00.000Z"
+        },
+        {
+          "amount": 50,
+          "description": "Repair",
+          "date": "2026-02-12T00:00:00.000Z"
+        }
+      ],
+      "acquisitionDate": "2026-02-02",
+      "notes": "Steep driveway"
+    },
+    "dryer": {
+      "purchaseCost": 0,
+      "repairCosts": 0,
+      "revenueGenerated": 0,
+      "brand": "Whirlpool"
+    },
+    "createdAt": "2026-02-05T05:28:39.395Z",
+    "updatedAt": "2026-02-05T06:29:44.501Z"
+  }
+]

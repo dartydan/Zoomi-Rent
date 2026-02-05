@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink, Wrench, CreditCard, CalendarClock, Plus, LogIn } from "lucide-react";
+import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink, Wrench, CreditCard, CalendarClock, Plus, LogIn, PackageX } from "lucide-react";
 import type { InstallInfo, InstallRecord } from "@/lib/install";
 import type { Unit } from "@/lib/unit";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
@@ -96,6 +96,7 @@ export default function AdminUserInstallPage() {
   const [lifetimeValue, setLifetimeValue] = useState<number>(0);
   type TimelineData = {
     installDate: string | null;
+    uninstallDate: string | null;
     payments: { date: string; amount: number; currency: string }[];
     nextPaymentDate: string | null;
     nextPaymentAmount: number | null;
@@ -179,6 +180,7 @@ export default function AdminUserInstallPage() {
     let cancelled = false;
     const empty: TimelineData = {
       installDate: null,
+      uninstallDate: null,
       payments: [],
       nextPaymentDate: null,
       nextPaymentAmount: null,
@@ -195,6 +197,7 @@ export default function AdminUserInstallPage() {
         if (cancelled) return;
         setTimeline({
           installDate: json.installDate ?? null,
+          uninstallDate: json.uninstallDate ?? null,
           payments: Array.isArray(json.payments) ? json.payments : [],
           nextPaymentDate: json.nextPaymentDate ?? null,
           nextPaymentAmount: json.nextPaymentAmount ?? null,
@@ -1121,10 +1124,12 @@ export default function AdminUserInstallPage() {
       </form>
 
       <Dialog open={installDialogOpen} onOpenChange={(open) => !open && closeInstallDialog()}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className={installDialogEditId === null ? "max-w-md" : "max-w-2xl max-h-[90vh] overflow-y-auto"}>
           <DialogHeader>
             <DialogTitle>{installDialogEditId === null ? "Add install" : "Edit install"}</DialogTitle>
-            <DialogDescription>Install and uninstall dates, address, notes, photos, and contracts. Files are stored in Google Drive.</DialogDescription>
+            <DialogDescription>
+              {installDialogEditId === null ? "Install and uninstall dates." : "Install and uninstall dates, address, notes, photos, and contracts. Files are stored in Google Drive."}
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleInstallSubmit} className="space-y-4">
             {error && (
@@ -1152,6 +1157,8 @@ export default function AdminUserInstallPage() {
                 />
               </div>
             </div>
+            {installDialogEditId !== null && (
+            <>
             <div className="space-y-2">
               <Label htmlFor="install-dialog-address">Address</Label>
               <AddressAutocomplete
@@ -1250,6 +1257,8 @@ export default function AdminUserInstallPage() {
                 </label>
               </div>
             </div>
+            </>
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeInstallDialog}>
                 Cancel
@@ -1277,9 +1286,10 @@ export default function AdminUserInstallPage() {
                 {/* vertical line */}
                 <span className="absolute left-[11px] top-2 bottom-2 w-px bg-border" aria-hidden />
                 {(() => {
-                  type Event = { date: string; kind: "install" | "payment" | "next" | "login" | "payment_method"; payload: unknown };
+                  type Event = { date: string; kind: "install" | "uninstall" | "payment" | "next" | "login" | "payment_method"; payload: unknown };
                   const events: Event[] = [];
                   if (timeline.installDate) events.push({ date: timeline.installDate, kind: "install", payload: null });
+                  if (timeline.uninstallDate) events.push({ date: timeline.uninstallDate, kind: "uninstall", payload: null });
                   timeline.payments.forEach((p) => events.push({ date: p.date, kind: "payment", payload: p }));
                   if (timeline.nextPaymentDate && timeline.nextPaymentAmount != null)
                     events.push({
@@ -1319,6 +1329,18 @@ export default function AdminUserInstallPage() {
                           </span>
                           <div className="min-w-0 pt-0.5">
                             <p className="text-sm font-medium text-foreground">Date installed</p>
+                            <p className="text-xs text-muted-foreground">{formatTimelineDate(ev.date)}</p>
+                          </div>
+                        </div>
+                      );
+                    if (ev.kind === "uninstall")
+                      return (
+                        <div key="uninstall" className="relative flex gap-3">
+                          <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-border bg-background" aria-hidden>
+                            <PackageX className="h-3.5 w-3.5 text-muted-foreground" />
+                          </span>
+                          <div className="min-w-0 pt-0.5">
+                            <p className="text-sm font-medium text-foreground">Date uninstalled</p>
                             <p className="text-xs text-muted-foreground">{formatTimelineDate(ev.date)}</p>
                           </div>
                         </div>
@@ -1453,7 +1475,10 @@ export default function AdminUserInstallPage() {
                 <div className="text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">Unit cost:</span>{" "}
                   {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(
-                    (assignedUnit.washer.purchaseCost ?? 0) + (assignedUnit.washer.repairCosts ?? 0)
+                    (assignedUnit.washer.purchaseCost ?? 0) +
+                    (assignedUnit.washer.additionalCosts?.length
+                      ? assignedUnit.washer.additionalCosts.reduce((s, e) => s + (e.amount ?? 0), 0)
+                      : (assignedUnit.washer.repairCosts ?? 0))
                   )}
                   {assignedUnit.washer.acquisitionSource && (
                     <> · From: {assignedUnit.washer.acquisitionSource}</>
@@ -1486,8 +1511,8 @@ export default function AdminUserInstallPage() {
               </div>
               <div className="flex items-center justify-between gap-2">
                 <Button variant="outline" size="sm" asChild>
-                  <Link href="/admin/property">
-                    View in Property tab
+                  <Link href={`/admin/units/${assignedUnit.id}`}>
+                    View unit
                     <ExternalLink className="h-3 w-3 ml-1 inline" />
                   </Link>
                 </Button>

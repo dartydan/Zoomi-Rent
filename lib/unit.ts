@@ -5,14 +5,30 @@
  */
 export type MachineStatus = "available" | "needs_repair" | "no_longer_owned";
 
+export type AdditionalCostEntry = {
+  amount: number;
+  description: string;
+  date?: string; // ISO date string
+};
+
+export type NoteEntry = {
+  text: string;
+  date: string; // ISO date string
+};
+
 export type MachineInfo = {
   model?: string;
   brand?: string;
   purchaseCost: number;
   repairCosts: number;
+  /** Multiple additional cost transactions (repair, parts, etc.). When present, repairCosts is ignored for total. */
+  additionalCosts?: AdditionalCostEntry[];
   acquisitionSource?: string;
+  acquisitionDate?: string; // ISO date string (YYYY-MM-DD)
   revenueGenerated: number;
   notes?: string;
+  /** Feed of notes with dates. When present, used instead of notes for display. */
+  notesFeed?: NoteEntry[];
   status?: MachineStatus;
 };
 
