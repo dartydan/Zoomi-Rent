@@ -194,9 +194,10 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + 13);
   
+  const EST = "America/New_York";
   const formatDateRange = () => {
-    const start = startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    const end = endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const start = startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: EST });
+    const end = endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST });
     return `${start} - ${end}`;
   };
   
@@ -394,13 +395,12 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                       </TableCell>
                       <TableCell className="font-medium">{t.customerName}</TableCell>
                       <TableCell>
-                        {(() => {
-                          const d = new Date((t.dateTimestamp ?? 0) * 1000);
-                          const y = d.getUTCFullYear();
-                          const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-                          const day = String(d.getUTCDate()).padStart(2, "0");
-                          return `${y}-${m}-${day}`;
-                        })()}
+                        {new Date((t.dateTimestamp ?? 0) * 1000).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                          timeZone: EST,
+                        })}
                       </TableCell>
                       <TableCell className="text-right">
                         ${t.amount.toLocaleString("en-US", {
@@ -456,9 +456,9 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
             {daysInView.map((date, i) => {
               const installsForDay = getInstallsForDate(date);
               const isToday = isSameDay(date, new Date());
-              const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+              const dayName = date.toLocaleDateString("en-US", { weekday: "short", timeZone: EST });
               const dayNum = date.getDate();
-              const monthYear = date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+              const monthYear = date.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: EST });
               return (
                 <div
                   key={i}
@@ -529,7 +529,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
               const hasInstalls = installsForDay.length > 0;
               const isToday = isSameDay(date, new Date());
               
-              const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+              const dayName = date.toLocaleDateString("en-US", { weekday: "short", timeZone: EST });
               const dayNum = date.getDate();
               
               return (
@@ -629,6 +629,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 month: "long",
                 day: "numeric",
                 year: "numeric",
+                timeZone: EST,
               })} at {selectedInstall?.time}
             </DialogDescription>
           </DialogHeader>
@@ -662,6 +663,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                         month: "long",
                         day: "numeric",
                         year: "numeric",
+                        timeZone: EST,
                       })}
                     </span>
                   </div>
@@ -744,6 +746,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 month: "long",
                 day: "numeric",
                 year: "numeric",
+                timeZone: EST,
               })}
             </DialogDescription>
           </DialogHeader>

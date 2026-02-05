@@ -47,6 +47,7 @@ function formatDate(timestamp: number): string {
     year: "numeric",
     month: "short",
     day: "numeric",
+    timeZone: "America/New_York",
   });
 }
 

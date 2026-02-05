@@ -577,6 +577,7 @@ export default function UnitDetailsPage() {
                             year: "numeric",
                             month: "short",
                             day: "numeric",
+                            timeZone: "America/New_York",
                           })}
                         </p>
                         <p className="text-foreground whitespace-pre-wrap">{n.text}</p>
@@ -737,11 +738,14 @@ export default function UnitDetailsPage() {
   );
 }
 
+const EST = "America/New_York";
+
 function formatTimelineDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
+    timeZone: EST,
   });
 }
 
@@ -752,6 +756,7 @@ function formatTimelineDateTime(iso: string) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: EST,
   });
 }
 
@@ -1026,7 +1031,7 @@ function AdditionalCostsField({
             <span className="shrink-0 whitespace-nowrap">{formatCurrency(e.amount ?? 0)}</span>
             {e.date ? (
               <span className="text-muted-foreground shrink-0 text-xs whitespace-nowrap">
-                {new Date(e.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                {new Date(e.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" })}
               </span>
             ) : (
               <span className="shrink-0 w-16" />
@@ -1221,7 +1226,7 @@ function EditableMachineField({
           ? (() => {
               const s = (value as string).slice(0, 10);
               const [y, m, d] = s.split("-").map(Number);
-              return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+              return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
             })()
           : "—"
         : (value as string | undefined) ?? "—";

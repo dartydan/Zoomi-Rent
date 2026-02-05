@@ -19,7 +19,7 @@ function getMonthBounds(monthOffset: number): { start: number; end: number } {
 function getMonthName(monthOffset: number): string {
   const d = new Date();
   d.setMonth(d.getMonth() + monthOffset);
-  return d.toLocaleString("en-US", { month: "long" });
+  return d.toLocaleString("en-US", { month: "long", timeZone: "America/New_York" });
 }
 
 export type AdminRevenueData = {

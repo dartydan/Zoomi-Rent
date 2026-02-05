@@ -504,11 +504,13 @@ export default function AdminUserInstallPage() {
     return Math.max(0, Math.min(index, maxIndex));
   }
 
+  const EST = "America/New_York";
   function formatTimelineDate(iso: string) {
     return new Date(iso).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
+      timeZone: EST,
     });
   }
   function formatTimelineDateTime(iso: string) {
@@ -518,6 +520,7 @@ export default function AdminUserInstallPage() {
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
+      timeZone: EST,
     });
   }
   function formatTimelineAmount(amount: number, currency: string) {
@@ -904,10 +907,10 @@ export default function AdminUserInstallPage() {
                         className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                        {new Date(rec.installDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        {new Date(rec.installDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST })}
                         <span className="text-muted-foreground">–</span>
                         {rec.uninstallDate
-                          ? new Date(rec.uninstallDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                          ? new Date(rec.uninstallDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST })
                           : "—"}
                       </button>
                     ))}

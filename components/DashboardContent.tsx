@@ -239,6 +239,7 @@ export function DashboardContent() {
       year: "numeric",
       month: "long",
       day: "numeric",
+      timeZone: "America/New_York",
     });
 
   const formatNextPaymentAmount = (amount: number, currency: string) =>

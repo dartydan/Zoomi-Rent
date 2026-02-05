@@ -576,6 +576,7 @@ export default function CustomersPage() {
                           <div className="flex items-center gap-1 text-sm">
                             <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
                             {new Date(customer.installDate).toLocaleDateString("en-US", {
+                              timeZone: "America/New_York",
                               month: "short",
                               day: "numeric",
                               year: "numeric",
