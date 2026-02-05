@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import Stripe from "stripe";
+import { clerkClient } from "@clerk/nextjs/server";
 import { addPendingCustomer } from "@/lib/pending-customers-store";
 
 export const dynamic = "force-dynamic";
@@ -62,9 +63,57 @@ export async function POST(req: Request) {
   const [firstName, ...lastParts] = name.split(/\s+/);
   const lastName = lastParts.join(" ") || "";
 
+  // If customer has email, create Clerk user and link to Stripe
+  if (email) {
+    try {
+      const existing = await clerkClient.users.getUserList({ emailAddress: [email], limit: 1 });
+      if (existing.data.length > 0) {
+        const user = existing.data[0];
+        await clerkClient.users.updateUserMetadata(user.id, {
+          publicMetadata: {
+            ...user.publicMetadata,
+            stripeCustomerId: customer.id,
+          },
+        });
+        return NextResponse.json({ received: true, linked: "existing Clerk user" }, { status: 200 });
+      }
+
+      const user = await clerkClient.users.createUser({
+        emailAddress: [email],
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+        publicMetadata: {
+          stripeCustomerId: customer.id,
+          customerProfile: {
+            address: street || city || state || zip
+              ? [street, city, state, zip].filter(Boolean).join(", ")
+              : undefined,
+            street: street || undefined,
+            city: city || undefined,
+            state: state || undefined,
+            zip: zip || undefined,
+          },
+        },
+      });
+
+      await stripe.customers.update(customer.id, {
+        metadata: { ...customer.metadata, clerk_user_id: user.id },
+      });
+
+      return NextResponse.json({ received: true, created: user.id }, { status: 200 });
+    } catch (err) {
+      console.error("Stripe webhook: failed to create Clerk user:", err);
+      return NextResponse.json(
+        { error: "Failed to create Clerk user" },
+        { status: 500 }
+      );
+    }
+  }
+
+  // No email: add to pending customers (admin-added flow)
   try {
     await addPendingCustomer({
-      email: email || "",
+      email: "",
       firstName: firstName || undefined,
       lastName: lastName || undefined,
       street: street || undefined,
