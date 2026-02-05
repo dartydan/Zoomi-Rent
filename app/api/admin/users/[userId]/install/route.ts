@@ -279,10 +279,11 @@ export async function PATCH(
       }
     }
 
+    const normalizeDateOnly = (s: string) => (s?.trim() ? s.trim().slice(0, 10) : s);
     const record: InstallRecord = {
       id: installId === "new" ? crypto.randomUUID() : installId,
-      installDate: installDate || (installId !== "new" ? existingInstalls.find((r) => r.id === installId)?.installDate ?? "" : ""),
-      uninstallDate: uninstallDate && uninstallDate.trim() ? uninstallDate.trim() : undefined,
+      installDate: normalizeDateOnly(installDate || (installId !== "new" ? existingInstalls.find((r) => r.id === installId)?.installDate ?? "" : "")),
+      uninstallDate: uninstallDate && uninstallDate.trim() ? normalizeDateOnly(uninstallDate.trim()) : undefined,
       installAddress: installAddress?.trim() || undefined,
       notes: notes?.trim() || undefined,
       photoUrls: photoUrls.length ? photoUrls : undefined,

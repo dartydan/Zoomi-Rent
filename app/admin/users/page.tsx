@@ -58,6 +58,13 @@ type PendingCustomer = {
   createdAt: string;
 };
 
+function parseDateForDisplay(iso: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z)?$/.test(iso.trim())) {
+    return new Date(iso.slice(0, 10) + "T12:00:00.000Z");
+  }
+  return new Date(iso);
+}
+
 export default function CustomersPage() {
   const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -575,7 +582,7 @@ export default function CustomersPage() {
                         ) : customer.installDate ? (
                           <div className="flex items-center gap-1 text-sm">
                             <Calendar className="h-3 w-3 text-muted-foreground shrink-0" />
-                            {new Date(customer.installDate).toLocaleDateString("en-US", {
+                            {parseDateForDisplay(customer.installDate).toLocaleDateString("en-US", {
                               timeZone: "America/New_York",
                               month: "short",
                               day: "numeric",

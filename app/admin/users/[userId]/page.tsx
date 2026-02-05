@@ -296,8 +296,8 @@ export default function AdminUserInstallPage() {
     if (editId !== null) {
       const rec = installs.find((r) => r.id === editId);
       if (rec) {
-        setInstallDate(rec.installDate ?? "");
-        setUninstallDate(rec.uninstallDate ?? "");
+        setInstallDate(rec.installDate ? rec.installDate.slice(0, 10) : "");
+        setUninstallDate(rec.uninstallDate ? rec.uninstallDate.slice(0, 10) : "");
         const parsed = parseInstallAddress(rec.installAddress ?? "");
         setInstallStreet(parsed.street);
         setInstallCity(parsed.city);
@@ -505,8 +505,15 @@ export default function AdminUserInstallPage() {
   }
 
   const EST = "America/New_York";
+  /** Parse date-only (YYYY-MM-DD) or midnight UTC as noon UTC so it displays as the intended calendar day in EST. */
+  function parseDateForDisplay(iso: string): Date {
+    if (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z)?$/.test(iso.trim())) {
+      return new Date(iso.slice(0, 10) + "T12:00:00.000Z");
+    }
+    return new Date(iso);
+  }
   function formatTimelineDate(iso: string) {
-    return new Date(iso).toLocaleDateString("en-US", {
+    return parseDateForDisplay(iso).toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -907,10 +914,10 @@ export default function AdminUserInstallPage() {
                         className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                        {new Date(rec.installDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST })}
+                        {parseDateForDisplay(rec.installDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST })}
                         <span className="text-muted-foreground">–</span>
                         {rec.uninstallDate
-                          ? new Date(rec.uninstallDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST })
+                          ? parseDateForDisplay(rec.uninstallDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST })
                           : "—"}
                       </button>
                     ))}
@@ -1147,7 +1154,7 @@ export default function AdminUserInstallPage() {
                   id="install-dialog-install-date"
                   type="date"
                   value={installDate ? installDate.slice(0, 10) : ""}
-                  onChange={(e) => setInstallDate(e.target.value ? `${e.target.value}T00:00:00.000Z` : "")}
+                  onChange={(e) => setInstallDate(e.target.value || "")}
                 />
               </div>
               <div className="space-y-2">
@@ -1156,7 +1163,7 @@ export default function AdminUserInstallPage() {
                   id="install-dialog-uninstall-date"
                   type="date"
                   value={uninstallDate ? uninstallDate.slice(0, 10) : ""}
-                  onChange={(e) => setUninstallDate(e.target.value ? `${e.target.value}T00:00:00.000Z` : "")}
+                  onChange={(e) => setUninstallDate(e.target.value || "")}
                 />
               </div>
             </div>

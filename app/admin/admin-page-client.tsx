@@ -97,7 +97,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
             userId: u.id,
             customerName: [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || "—",
             address: u.installAddress ?? u.address ?? "—",
-            date: new Date(u.installDate!),
+            date: parseDateForDisplay(u.installDate!),
             time: "—",
             units: "—",
             status: "scheduled" as const,
@@ -195,6 +195,12 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
   endDate.setDate(endDate.getDate() + 13);
   
   const EST = "America/New_York";
+  const parseDateForDisplay = (iso: string): Date => {
+    if (/^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z)?$/.test(iso.trim())) {
+      return new Date(iso.slice(0, 10) + "T12:00:00.000Z");
+    }
+    return new Date(iso);
+  };
   const formatDateRange = () => {
     const start = startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: EST });
     const end = endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST });

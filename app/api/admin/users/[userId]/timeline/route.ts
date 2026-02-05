@@ -171,11 +171,27 @@ export async function GET(
           "payment_method_removed",
           (obj) => obj.customer === stripeCustomerId
         );
-        addIfForCustomer(
-          customerUpdatedRes.data as StripeEventWithObject[],
-          "payment_settings_updated",
-          (obj) => obj.id === stripeCustomerId
-        );
+        type CustomerUpdatedEvent = {
+          created?: number;
+          data?: {
+            object?: { id?: string };
+            previous_attributes?: { invoice_settings?: unknown; default_source?: unknown };
+          };
+        };
+        (customerUpdatedRes.data as CustomerUpdatedEvent[]).forEach((ev) => {
+          const obj = ev.data?.object;
+          const prev = ev.data?.previous_attributes;
+          const isDefaultPmChange =
+            prev &&
+            (Object.prototype.hasOwnProperty.call(prev, "invoice_settings") ||
+              Object.prototype.hasOwnProperty.call(prev, "default_source"));
+          if (obj?.id === stripeCustomerId && ev.created != null && isDefaultPmChange) {
+            paymentMethodChanges.push({
+              date: new Date(ev.created * 1000).toISOString(),
+              type: "payment_settings_updated",
+            });
+          }
+        });
         paymentMethodChanges.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       } catch (e) {
         console.warn("Timeline: could not fetch payment method events:", e);
