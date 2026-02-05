@@ -89,6 +89,9 @@ export default function UnitDetailsPage() {
     field: MachineField | "acquisition" | "additional";
   } | null>(null);
   const inlineInputRef = useRef<HTMLInputElement>(null);
+  const machineDialogBrandRef = useRef<HTMLInputElement>(null);
+  const machineDialogModelRef = useRef<HTMLInputElement>(null);
+  const machineDialogNotesRef = useRef<HTMLTextAreaElement>(null);
 
   type TimelineData = {
     installDate: string | null;
@@ -307,10 +310,7 @@ export default function UnitDetailsPage() {
   async function handleAddNote() {
     const text = addNoteText.trim();
     if (!text || !unit) return;
-    let existing = unit.washer.notesFeed ?? [];
-    if (existing.length === 0 && unit.washer.notes?.trim()) {
-      existing = [{ text: unit.washer.notes.trim(), date: unit.updatedAt ?? unit.createdAt }];
-    }
+    const existing = unit.washer.notesFeed ?? [];
     const newNote: NoteEntry = { text, date: new Date().toISOString() };
     const updated = await patchUnit(unit.id, {
       washer: { notesFeed: [...existing, newNote] },
@@ -481,28 +481,61 @@ export default function UnitDetailsPage() {
                 <DialogTitle>{machineDialogSlot === "washer" ? "Washer" : "Dryer"} details</DialogTitle>
               </DialogHeader>
               {machineDialogSlot && (
-                <div className="space-y-4">
-                  <EditableMachineField
-                    unit={unit}
-                    slot={machineDialogSlot}
-                    field="brand"
-                    formatCurrency={formatCurrency}
-                    patchUnit={patchUnit}
-                    infoEditingField={infoEditingField}
-                    setInfoEditingField={setInfoEditingField}
-                    inlineInputRef={inlineInputRef}
-                  />
-                  <EditableMachineField
-                    unit={unit}
-                    slot={machineDialogSlot}
-                    field="model"
-                    formatCurrency={formatCurrency}
-                    patchUnit={patchUnit}
-                    infoEditingField={infoEditingField}
-                    setInfoEditingField={setInfoEditingField}
-                    inlineInputRef={inlineInputRef}
-                  />
-                </div>
+                <>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground capitalize">Brand</label>
+                      <Input
+                        ref={machineDialogBrandRef}
+                        key={`brand-${unit.id}-${machineDialogSlot}-${unit[machineDialogSlot].brand ?? ""}`}
+                        className="h-8"
+                        defaultValue={unit[machineDialogSlot].brand ?? ""}
+                        placeholder="Brand"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground capitalize">Model</label>
+                      <Input
+                        ref={machineDialogModelRef}
+                        key={`model-${unit.id}-${machineDialogSlot}-${unit[machineDialogSlot].model ?? ""}`}
+                        className="h-8"
+                        defaultValue={unit[machineDialogSlot].model ?? ""}
+                        placeholder="Model"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground capitalize">Notes</label>
+                      <textarea
+                        ref={machineDialogNotesRef}
+                        key={`notes-${unit.id}-${machineDialogSlot}-${unit[machineDialogSlot].notes ?? ""}`}
+                        rows={3}
+                        className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="Machine notes, repair history, etc."
+                        defaultValue={unit[machineDialogSlot].notes ?? ""}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      onClick={() => {
+                        if (!machineDialogSlot) return;
+                        const brand = machineDialogBrandRef.current?.value.trim() || undefined;
+                        const model = machineDialogModelRef.current?.value.trim() || undefined;
+                        const notes = machineDialogNotesRef.current?.value.trim() || undefined;
+                        patchUnit(unit.id, {
+                          [machineDialogSlot]: {
+                            brand,
+                            model,
+                            notes,
+                          },
+                        });
+                        setMachineDialogSlot(null);
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </DialogFooter>
+                </>
               )}
             </DialogContent>
           </Dialog>
@@ -526,13 +559,10 @@ export default function UnitDetailsPage() {
             <CardContent>
               {(() => {
                 const feed = unit.washer.notesFeed ?? [];
-                const legacy = unit.washer.notes?.trim();
                 const items: { text: string; date: string }[] =
                   feed.length > 0
                     ? [...feed].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                    : legacy
-                      ? [{ text: legacy, date: unit.updatedAt ?? unit.createdAt }]
-                      : [];
+                    : [];
                 if (items.length === 0) {
                   return (
                     <p className="text-sm text-muted-foreground">No notes yet. Click + to add one.</p>
@@ -973,7 +1003,22 @@ function AdditionalCostsField({
 
   return (
     <div className="space-y-4">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Additional costs</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Additional costs</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1 shrink-0"
+          onClick={() => {
+            setAddDate(new Date().toISOString().slice(0, 10));
+            setAddOpen(true);
+          }}
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </Button>
+      </div>
       <div className="space-y-1.5">
         {entries.map((e, i) => (
           <div key={i} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded border border-border bg-muted/30 text-sm">
@@ -998,19 +1043,6 @@ function AdditionalCostsField({
             </div>
           </div>
         ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-full h-8 gap-1"
-          onClick={() => {
-            setAddDate(new Date().toISOString().slice(0, 10));
-            setAddOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4" />
-          Add
-        </Button>
       </div>
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="max-w-sm">
@@ -1186,7 +1218,11 @@ function EditableMachineField({
       ? formatCurrency((value as number) ?? 0)
       : format === "date"
         ? (value as string | undefined)
-          ? new Date((value as string).slice(0, 10)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+          ? (() => {
+              const s = (value as string).slice(0, 10);
+              const [y, m, d] = s.split("-").map(Number);
+              return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            })()
           : "—"
         : (value as string | undefined) ?? "—";
 

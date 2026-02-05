@@ -21,6 +21,7 @@ export async function GET() {
 
   try {
     const { data: users } = await clerkClient.users.getUserList({ limit: 100 });
+    const nonAdmins = users.filter((u) => (u.publicMetadata?.role as string) !== "admin");
     let stripe: Stripe | null = null;
     try {
       if (process.env.STRIPE_SECRET_KEY) stripe = getStripe();
@@ -29,7 +30,7 @@ export async function GET() {
     }
 
     const list = await Promise.all(
-      users.map(async (u) => {
+      nonAdmins.map(async (u) => {
         const install = (u.publicMetadata?.install ?? {}) as {
           installDate?: string;
           installAddress?: string;
