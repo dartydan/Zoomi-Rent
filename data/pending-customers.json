@@ -1,18 +1,1 @@
-[
-  {
-    "id": "65c7fabb-0694-4262-90ef-055ea9056f35",
-    "email": "hello@zoomi.co",
-    "firstName": "Test",
-    "lastName": "User",
-    "address": "5504 W Aberdale Ln",
-    "createdAt": "2026-01-31T23:28:59.354Z"
-  },
-  {
-    "id": "2344591d-f7b4-40f7-82a6-f19621afdb18",
-    "email": "test@zoomi.co",
-    "firstName": "Test",
-    "lastName": "User",
-    "address": "5504 W Aberdale Ln",
-    "createdAt": "2026-01-31T23:33:46.346Z"
-  }
-]
+[]
