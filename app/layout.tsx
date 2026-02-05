@@ -16,6 +16,9 @@ const nunitoSans = Nunito_Sans({
 export const metadata: Metadata = {
   title: "Zoomi Rentals - Washer & Dryer Rental",
   description: "Manage your washer and dryer rental",
+  openGraph: {
+    images: ["/hero-laundry.png"],
+  },
 };
 
 const hasClerkKey = !!(

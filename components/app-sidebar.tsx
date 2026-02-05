@@ -19,6 +19,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { isStaffRole } from "@/lib/staff-role";
 
 const CUSTOMER_PORTAL_VIEW_COOKIE = "customer_portal_view";
 const END_SERVICES_MAILTO =
@@ -32,7 +33,7 @@ export function AppSidebar() {
   const { user } = useUser();
   const { setOpenMobile, isMobile } = useSidebar();
   const isDevelopment = process.env.NODE_ENV === "development";
-  const isAdminUser = (user?.publicMetadata?.role as string | undefined) === "admin" || (isDevelopment && pathname.startsWith("/admin"));
+  const isAdminUser = isStaffRole(user?.publicMetadata?.role as string | undefined) || (isDevelopment && pathname.startsWith("/admin"));
   const isAdminSection = pathname.startsWith("/admin");
 
   // Close mobile sidebar when navigation occurs

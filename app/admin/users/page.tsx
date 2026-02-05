@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Search, UserPlus, Mail, Phone, MapPin, Package, Calendar, Check, ChevronRight, Trash2 } from "lucide-react";
+import { Search, UserPlus, Mail, Phone, MapPin, Package, Calendar, Check, ChevronRight, Trash2, MessageSquare } from "lucide-react";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 
@@ -144,6 +144,12 @@ export default function CustomersPage() {
   }, []);
 
   const displayAddress = (c: Customer) => c.address ?? c.installAddress ?? null;
+
+  function mapsUrl(c: Customer): string | null {
+    const addr = displayAddress(c);
+    if (!addr?.trim()) return null;
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addr)}`;
+  }
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -439,9 +445,9 @@ export default function CustomersPage() {
         </p>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-3 gap-4">
         <Card
-          className={`cursor-pointer transition-colors hover:bg-muted/50 ${filterStatus === "installed" ? "ring-2 ring-primary" : ""}`}
+          className={`cursor-pointer transition-colors hover:bg-muted/50 text-center md:text-left ${filterStatus === "installed" ? "ring-2 ring-primary" : ""}`}
           onClick={() => setFilterStatus((prev) => (prev === "installed" ? "all" : "installed"))}
           role="button"
           tabIndex={0}
@@ -460,7 +466,7 @@ export default function CustomersPage() {
           </CardContent>
         </Card>
         <Card
-          className={`cursor-pointer transition-colors hover:bg-muted/50 ${filterStatus === "upcoming" ? "ring-2 ring-primary" : ""}`}
+          className={`cursor-pointer transition-colors hover:bg-muted/50 text-center md:text-left ${filterStatus === "upcoming" ? "ring-2 ring-primary" : ""}`}
           onClick={() => setFilterStatus((prev) => (prev === "upcoming" ? "all" : "upcoming"))}
           role="button"
           tabIndex={0}
@@ -472,14 +478,14 @@ export default function CustomersPage() {
           }}
         >
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming Installs</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{loading ? "—" : upcomingCount}</div>
           </CardContent>
         </Card>
         <Card
-          className={`cursor-pointer transition-colors hover:bg-muted/50 ${filterStatus === "not_scheduled" ? "ring-2 ring-primary" : ""}`}
+          className={`cursor-pointer transition-colors hover:bg-muted/50 text-center md:text-left ${filterStatus === "not_scheduled" ? "ring-2 ring-primary" : ""}`}
           onClick={() => setFilterStatus((prev) => (prev === "not_scheduled" ? "all" : "not_scheduled"))}
           role="button"
           tabIndex={0}
@@ -491,7 +497,7 @@ export default function CustomersPage() {
           }}
         >
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Not Scheduled</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Queue</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{loading ? "—" : notScheduledCount}</div>
@@ -517,26 +523,126 @@ export default function CustomersPage() {
               <LoadingAnimation />
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="pl-6">Customer</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Billing</TableHead>
-                  <TableHead>Install Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right pr-6">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Mobile: name + 4 action icons */}
+              <div className="block md:hidden divide-y divide-border">
                 {filteredCustomers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8 pl-6 pr-6">
-                      No customers found.
-                    </TableCell>
-                  </TableRow>
+                  <div className="py-8 text-center text-muted-foreground">
+                    No customers found.
+                  </div>
                 ) : (
+                  filteredCustomers.map((customer) => {
+                    const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "—";
+                    const navUrl = mapsUrl(customer);
+                    const telUrl = customer.phone ? `tel:${customer.phone.replace(/\s/g, "")}` : null;
+                    const smsUrl = customer.phone ? `sms:${customer.phone.replace(/\s/g, "")}` : null;
+                    const mailUrl = customer.email ? `mailto:${customer.email}` : null;
+                    return (
+                      <div
+                        key={customer.id}
+                        className={`flex items-center justify-between gap-2 py-3 px-4 ${!customer.isPending ? "cursor-pointer hover:bg-muted active:bg-muted" : ""}`}
+                        role={!customer.isPending ? "button" : undefined}
+                        tabIndex={!customer.isPending ? 0 : undefined}
+                        onClick={
+                          !customer.isPending
+                            ? () => router.push(`/admin/users/${customer.id}`)
+                            : undefined
+                        }
+                        onKeyDown={
+                          !customer.isPending
+                            ? (e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  router.push(`/admin/users/${customer.id}`);
+                                }
+                              }
+                            : undefined
+                        }
+                      >
+                        <span className="font-medium truncate flex-1 min-w-0">{name}</span>
+                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {navUrl ? (
+                            <a
+                              href={navUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                              aria-label="Navigate to address"
+                            >
+                              <MapPin className="h-4 w-4" />
+                            </a>
+                          ) : (
+                            <span className="p-2 text-muted-foreground/40" aria-hidden>
+                              <MapPin className="h-4 w-4" />
+                            </span>
+                          )}
+                          {telUrl ? (
+                            <a
+                              href={telUrl}
+                              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                              aria-label="Call"
+                            >
+                              <Phone className="h-4 w-4" />
+                            </a>
+                          ) : (
+                            <span className="p-2 text-muted-foreground/40" aria-hidden>
+                              <Phone className="h-4 w-4" />
+                            </span>
+                          )}
+                          {smsUrl ? (
+                            <a
+                              href={smsUrl}
+                              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                              aria-label="Text"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </a>
+                          ) : (
+                            <span className="p-2 text-muted-foreground/40" aria-hidden>
+                              <MessageSquare className="h-4 w-4" />
+                            </span>
+                          )}
+                          {mailUrl ? (
+                            <a
+                              href={mailUrl}
+                              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                              aria-label="Email"
+                            >
+                              <Mail className="h-4 w-4" />
+                            </a>
+                          ) : (
+                            <span className="p-2 text-muted-foreground/40" aria-hidden>
+                              <Mail className="h-4 w-4" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Desktop: full table */}
+              <Table className="hidden md:table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-6">Customer</TableHead>
+                    <TableHead>Contact</TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead>Billing</TableHead>
+                    <TableHead>Install Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right pr-6">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCustomers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8 pl-6 pr-6">
+                        No customers found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
                   filteredCustomers.map((customer) => (
                     <TableRow
                       key={customer.id}
@@ -646,9 +752,10 @@ export default function CustomersPage() {
                       </TableCell>
                     </TableRow>
                   ))
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            </>
           )}
         </CardContent>
       </Card>

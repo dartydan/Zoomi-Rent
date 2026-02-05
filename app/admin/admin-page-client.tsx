@@ -297,42 +297,71 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
       </div>
 
       {/* Inventory Stats */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-base font-medium">Units Rented</CardTitle>
-            <CardDescription className="text-3xl font-bold text-foreground">
-              {unitsRented}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {((unitsRented / totalInventory) * 100).toFixed(0)}% utilization
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-base font-medium">Units Available</CardTitle>
-            <CardDescription className="text-3xl font-bold text-foreground">
-              {unitsAvailable}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">Ready for rental</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-base font-medium">Total Inventory</CardTitle>
-            <CardDescription className="text-3xl font-bold text-foreground">
-              {totalInventory}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">Units in fleet</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-3 gap-6">
+        <div className="flex flex-col items-center gap-2 md:gap-0 md:block">
+          <Card className="w-full flex flex-col items-center justify-center py-4 md:py-0 md:block text-center md:text-left">
+            <div className="hidden md:block">
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-base font-medium">Rented</CardTitle>
+                <CardDescription className="text-3xl font-bold text-foreground">
+                  {unitsRented}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  {totalInventory > 0 ? `${((unitsRented / totalInventory) * 100).toFixed(0)}% utilization` : "—"}
+                </p>
+              </CardContent>
+            </div>
+            <div className="flex flex-col items-center gap-1 p-4 md:hidden">
+              <p className="text-sm font-medium text-muted-foreground">Rented</p>
+              <p className="text-3xl font-bold text-foreground">{unitsRented}</p>
+            </div>
+          </Card>
+          <p className="text-sm text-muted-foreground md:hidden">
+            {totalInventory > 0 ? `${((unitsRented / totalInventory) * 100).toFixed(0)}% utilization` : "—"}
+          </p>
+        </div>
+        <div className="flex flex-col items-center gap-2 md:gap-0 md:block">
+          <Card className="w-full flex flex-col items-center justify-center py-4 md:py-0 md:block text-center md:text-left">
+            <div className="hidden md:block">
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-base font-medium">Available</CardTitle>
+                <CardDescription className="text-3xl font-bold text-foreground">
+                  {unitsAvailable}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Ready for rental</p>
+              </CardContent>
+            </div>
+            <div className="flex flex-col items-center gap-1 p-4 md:hidden">
+              <p className="text-sm font-medium text-muted-foreground">Available</p>
+              <p className="text-3xl font-bold text-foreground">{unitsAvailable}</p>
+            </div>
+          </Card>
+          <p className="text-sm text-muted-foreground md:hidden">Ready for rental</p>
+        </div>
+        <div className="flex flex-col items-center gap-2 md:gap-0 md:block">
+          <Card className="w-full flex flex-col items-center justify-center py-4 md:py-0 md:block text-center md:text-left">
+            <div className="hidden md:block">
+              <CardHeader className="space-y-1">
+                <CardTitle className="text-base font-medium">All</CardTitle>
+                <CardDescription className="text-3xl font-bold text-foreground">
+                  {totalInventory}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Units in fleet</p>
+              </CardContent>
+            </div>
+            <div className="flex flex-col items-center gap-1 p-4 md:hidden">
+              <p className="text-sm font-medium text-muted-foreground">All</p>
+              <p className="text-3xl font-bold text-foreground">{totalInventory}</p>
+            </div>
+          </Card>
+          <p className="text-sm text-muted-foreground md:hidden">Units in fleet</p>
+        </div>
       </div>
 
       {/* Revenue Section */}
@@ -342,7 +371,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
           <CardDescription>Track income and forecasted growth • Click amounts to view transactions</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 sm:grid-cols-3">
+          <div className="grid grid-cols-3 gap-6">
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">
                 {revenue.lastMonthName} Revenue
@@ -479,19 +508,21 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle className="text-base">Installation Schedule</CardTitle>
-              <CardDescription>1-week view • Tap a date to view details</CardDescription>
+              <CardDescription className="md:hidden">Tap to view details</CardDescription>
+              <CardDescription className="hidden md:block">1-week view • Tap a date to view details</CardDescription>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center justify-between w-full min-w-0 gap-2">
               <Button
                 variant="outline"
                 size="icon"
                 onClick={goToPreviousWeek}
                 aria-label="Previous week"
+                className="shrink-0"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="min-w-[160px] text-center">
-                <span className="text-sm font-semibold">
+              <div className="flex-1 min-w-0 flex justify-center">
+                <span className="text-sm font-semibold truncate">
                   {formatDateRange()}
                 </span>
               </div>
@@ -500,6 +531,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 size="icon"
                 onClick={goToNextWeek}
                 aria-label="Next week"
+                className="shrink-0"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -507,60 +539,54 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Mobile: horizontal scroll week view */}
-          <div className="block md:hidden -mx-1 overflow-x-auto pb-2">
-            <div className="flex gap-2 min-w-min px-1">
-              {daysInView.map((date, i) => {
-                const installsForDay = getInstallsForDate(date);
-                const isToday = isSameDay(date, new Date());
-                const dayName = date.toLocaleDateString("en-US", { weekday: "short", timeZone: EST });
-                const dayNum = date.getDate();
-                const monthShort = date.toLocaleDateString("en-US", { month: "short", timeZone: EST });
-                return (
-                  <div
-                    key={i}
-                    className={`flex-shrink-0 w-[min(140px,calc(50vw-1rem))] rounded-lg border-2 p-2 ${
-                      isToday ? "border-primary/60 bg-primary/5" : "border-border"
-                    }`}
-                  >
-                    <div className="mb-1.5 pb-1.5 border-b border-border">
-                      <div className="text-[10px] font-medium text-muted-foreground uppercase">
-                        {dayName}
-                      </div>
-                      <div className={`text-base font-bold leading-tight ${isToday ? "text-primary" : "text-foreground"}`}>
-                        {dayNum} {monthShort}
-                      </div>
-                    </div>
-                    <div className="space-y-1 min-h-[2rem]">
-                      {installsForDay.length > 0 ? (
-                        installsForDay.map((install, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              setSelectedInstall(install);
-                              setIsDialogOpen(true);
-                            }}
-                            className="w-full text-left rounded p-2 min-h-[44px] bg-primary/10 active:bg-primary/20 transition-colors border border-transparent touch-manipulation"
-                          >
-                            <div className="font-semibold text-primary text-xs truncate">
-                              {install.time}
-                            </div>
-                            <div className="text-foreground text-xs truncate">
-                              {install.customerName}
-                            </div>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="text-[10px] text-muted-foreground py-1">
-                          No installs
-                        </div>
-                      )}
-                    </div>
+          {/* Mobile: list view of week (7 days) */}
+          <div className="block md:hidden space-y-3">
+            {daysInView.map((date, i) => {
+              const installsForDay = getInstallsForDate(date);
+              const isToday = isSameDay(date, new Date());
+              const dayLabel = date.toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                timeZone: EST,
+              });
+              return (
+                <div
+                  key={i}
+                  className={`rounded-lg border-2 overflow-hidden ${
+                    isToday ? "border-primary/60 bg-primary/5" : "border-border"
+                  }`}
+                >
+                  <div className="px-3 py-2 border-b border-border bg-muted/30">
+                    <span className={`text-sm font-semibold ${isToday ? "text-primary" : "text-foreground"}`}>
+                      {dayLabel}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
+                  <div className="divide-y divide-border">
+                    {installsForDay.length > 0 ? (
+                      installsForDay.map((install, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setSelectedInstall(install);
+                            setIsDialogOpen(true);
+                          }}
+                          className="w-full text-left px-3 py-3 min-h-[48px] bg-background active:bg-muted transition-colors touch-manipulation flex flex-col gap-0.5"
+                        >
+                          <span className="font-semibold text-primary text-sm">{install.time}</span>
+                          <span className="text-foreground text-sm">{install.customerName}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-4 text-sm text-muted-foreground">
+                        No installs
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Desktop: 7-day calendar grid */}

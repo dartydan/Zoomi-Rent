@@ -14,6 +14,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
+import { isStaffRole } from "@/lib/staff-role";
 
 interface Invoice {
   id: string;
@@ -55,7 +56,7 @@ export function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
-  const isAdmin = (user?.publicMetadata?.role as string | undefined) === "admin";
+  const isAdmin = isStaffRole(user?.publicMetadata?.role as string | undefined);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
 
   useEffect(() => {

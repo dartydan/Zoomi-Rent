@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { ArrowLeft, Moon, Sun, User } from "lucide-react";
 import Link from "next/link";
+import { isStaffRole } from "@/lib/staff-role";
 
 type AdminUser = {
   id: string;
@@ -24,7 +25,7 @@ function ViewAsSelect() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useUser();
-  const isAdmin = (user?.publicMetadata?.role as string | undefined) === "admin";
+  const isAdmin = isStaffRole(user?.publicMetadata?.role as string | undefined);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
 
   const viewAs = searchParams.get("viewAs") ?? "";

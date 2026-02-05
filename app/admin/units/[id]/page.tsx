@@ -21,6 +21,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
+import { CustomSelect } from "@/components/ui/custom-select";
+import { Label } from "@/components/ui/label";
 import { Plus, X, Wrench, PackageX, CreditCard, CalendarClock, Package, DollarSign, Home, User, Copy, Check, FileText } from "lucide-react";
 import type { Unit, MachineInfo, MachineStatus, AdditionalCostEntry, NoteEntry } from "@/lib/unit";
 
@@ -46,6 +48,14 @@ function formatCurrency(n: number) {
 function userDisplay(u: AdminUser) {
   const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
   return name || u.email || u.id;
+}
+
+function deviceInfoProgress(brand: string | null | undefined, model: string | null | undefined): number {
+  const hasBrand = !!brand?.trim();
+  const hasModel = !!model?.trim();
+  if (hasBrand && hasModel) return 100;
+  if (hasBrand || hasModel) return 70;
+  return 0;
 }
 
 type DotStatus = "installed" | "available" | "needs_repair" | "no_longer_owned";
@@ -110,6 +120,9 @@ export default function UnitDetailsPage() {
   const [addNoteOpen, setAddNoteOpen] = useState(false);
   const [addNoteText, setAddNoteText] = useState("");
   const [machineDialogSlot, setMachineDialogSlot] = useState<"washer" | "dryer" | null>(null);
+  const [connectCustomerDialogOpen, setConnectCustomerDialogOpen] = useState(false);
+  const [connectUnits, setConnectUnits] = useState<Unit[] | null>(null);
+  const [assigningToUserId, setAssigningToUserId] = useState<string | null>(null);
 
   const userById = (uid: string) => users.find((u) => u.id === uid);
 
@@ -172,6 +185,23 @@ export default function UnitDetailsPage() {
   useEffect(() => {
     load();
   }, [id]);
+
+  useEffect(() => {
+    if (!connectCustomerDialogOpen) return;
+    let cancelled = false;
+    fetch("/api/admin/units")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { units?: Unit[] } | null) => {
+        if (cancelled) return;
+        setConnectUnits(Array.isArray(data?.units) ? data.units : []);
+      })
+      .catch(() => {
+        if (!cancelled) setConnectUnits([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connectCustomerDialogOpen]);
 
   useEffect(() => {
     if (!unit) return;
@@ -425,11 +455,13 @@ export default function UnitDetailsPage() {
             )}
           </span>
           {!unit.assignedUserId ? (
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/admin/users">
-                <Plus className="h-4 w-4 mr-1" />
-                Assign customer
-              </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConnectCustomerDialogOpen(true)}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Assign customer
             </Button>
           ) : (
             <Button
@@ -455,25 +487,101 @@ export default function UnitDetailsPage() {
           <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1 justify-start h-auto py-3 px-4"
+              className="relative flex-1 justify-start h-auto py-3 px-4 overflow-hidden border-border"
               onClick={() => setMachineDialogSlot("washer")}
+              aria-label={`Washer, ${deviceInfoProgress(unit.washer.brand, unit.washer.model)}% complete`}
             >
-              <span className="text-lg font-semibold">Washer</span>
-              <span className="ml-2 text-muted-foreground truncate">
-                {[unit.washer.brand, unit.washer.model].filter(Boolean).join(" ") || "—"}
+              <div
+                className="absolute inset-0 bg-green-500/25 transition-[width] rounded-md"
+                style={{ width: `${deviceInfoProgress(unit.washer.brand, unit.washer.model)}%` }}
+                aria-hidden
+              />
+              <span className="relative z-10 flex items-center w-full min-w-0">
+                <span className="text-lg font-semibold truncate">Washer</span>
+                {deviceInfoProgress(unit.washer.brand, unit.washer.model) === 70 && (
+                  <Plus className="relative z-10 h-4 w-4 ml-auto text-green-500 shrink-0" aria-hidden />
+                )}
               </span>
             </Button>
             <Button
               variant="outline"
-              className="flex-1 justify-start h-auto py-3 px-4"
+              className="relative flex-1 justify-start h-auto py-3 px-4 overflow-hidden border-border"
               onClick={() => setMachineDialogSlot("dryer")}
+              aria-label={`Dryer, ${deviceInfoProgress(unit.dryer.brand, unit.dryer.model)}% complete`}
             >
-              <span className="text-lg font-semibold">Dryer</span>
-              <span className="ml-2 text-muted-foreground truncate">
-                {[unit.dryer.brand, unit.dryer.model].filter(Boolean).join(" ") || "—"}
+              <div
+                className="absolute inset-0 bg-green-500/25 transition-[width] rounded-md"
+                style={{ width: `${deviceInfoProgress(unit.dryer.brand, unit.dryer.model)}%` }}
+                aria-hidden
+              />
+              <span className="relative z-10 flex items-center w-full min-w-0">
+                <span className="text-lg font-semibold truncate">Dryer</span>
+                {deviceInfoProgress(unit.dryer.brand, unit.dryer.model) === 70 && (
+                  <Plus className="relative z-10 h-4 w-4 ml-auto text-green-500 shrink-0" aria-hidden />
+                )}
               </span>
             </Button>
           </div>
+
+          <Dialog open={connectCustomerDialogOpen} onOpenChange={(open) => !open && setConnectCustomerDialogOpen(false)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Connect to customer</DialogTitle>
+                <DialogDescription>
+                  Select a customer to assign this unit to.
+                </DialogDescription>
+              </DialogHeader>
+              {connectUnits === null ? (
+                <div className="flex justify-center py-8">
+                  <LoadingAnimation />
+                </div>
+              ) : (() => {
+                const assignedIds = new Set(
+                  connectUnits.filter((u) => u.assignedUserId).map((u) => u.assignedUserId!)
+                );
+                const availableUsers = users.filter((u) => !assignedIds.has(u.id));
+                return availableUsers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">
+                    No customers available. All customers already have units assigned.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Customer</Label>
+                    <CustomSelect
+                      options={availableUsers.map((u) => ({
+                        value: u.id,
+                        label: `${userDisplay(u)}${u.email ? ` (${u.email})` : ""}`,
+                      }))}
+                      value=""
+                      onChange={async (value) => {
+                        if (!value.trim()) return;
+                        setAssigningToUserId(value);
+                        try {
+                          const res = await fetch(`/api/admin/units/${unit.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ assignedUserId: value }),
+                          });
+                          if (!res.ok) throw new Error("Failed to assign");
+                          setConnectCustomerDialogOpen(false);
+                          await load();
+                        } catch {
+                          setError("Failed to assign unit to customer");
+                        } finally {
+                          setAssigningToUserId(null);
+                        }
+                      }}
+                      placeholder="Select customer"
+                      icon={<User className="h-4 w-4" />}
+                    />
+                    {assigningToUserId && (
+                      <p className="text-sm text-muted-foreground">Assigning…</p>
+                    )}
+                  </div>
+                );
+              })()}
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={machineDialogSlot !== null} onOpenChange={(open) => !open && setMachineDialogSlot(null)}>
             <DialogContent>

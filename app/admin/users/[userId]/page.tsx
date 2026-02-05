@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink, Wrench, CreditCard, CalendarClock, Plus, LogIn, PackageX, Trash2 } from "lucide-react";
+import { Calendar, DollarSign, Mail, Phone, MapPin, X, Upload, FileText, ExternalLink, Wrench, CreditCard, CalendarClock, Plus, LogIn, PackageX, Trash2, PhoneCall, MessageSquare, Copy, Pencil } from "lucide-react";
 import type { InstallInfo, InstallRecord } from "@/lib/install";
 import type { Unit } from "@/lib/unit";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
@@ -25,6 +25,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type CustomerProfile = {
   firstName?: string;
@@ -785,21 +792,46 @@ export default function AdminUserInstallPage() {
                       />
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        const value = customerProfile?.email ?? "";
-                        const display = customerProfile?.email || "Add email";
-                        setEditingContactValue(value);
-                        setContactClickCaretIndex(getCaretIndexFromClick(e, value.length));
-                        setEditingContactField("email");
-                      }}
-                      className="flex items-center gap-2 text-sm text-left w-full rounded px-2 py-1.5 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text"
-                      style={{ appearance: "none", background: "none" }}
-                    >
-                      <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className={customerProfile?.email ? "text-foreground" : "text-muted-foreground"}>{customerProfile?.email || "Add email"}</span>
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 text-sm text-left w-full rounded px-2 py-1.5 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-pointer"
+                          style={{ appearance: "none", background: "none" }}
+                        >
+                          <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className={customerProfile?.email ? "text-foreground" : "text-muted-foreground"}>{customerProfile?.email || "Add email"}</span>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {customerProfile?.email && (
+                          <>
+                            <DropdownMenuItem asChild>
+                              <a href={`mailto:${customerProfile.email}`}>
+                                <Mail className="h-4 w-4" />
+                                Email
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => navigator.clipboard.writeText(customerProfile?.email ?? "")}
+                            >
+                              <Copy className="h-4 w-4" />
+                              Copy
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setEditingContactValue(customerProfile?.email ?? "");
+                            setEditingContactField("email");
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          {customerProfile?.email ? "Edit" : "Add email"}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </div>
                 <div>
@@ -838,20 +870,52 @@ export default function AdminUserInstallPage() {
                       />
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        const value = customerProfile?.phone ?? "";
-                        setEditingContactValue(value);
-                        setContactClickCaretIndex(getCaretIndexFromClick(e, value.length));
-                        setEditingContactField("phone");
-                      }}
-                      className="flex items-center gap-2 text-sm text-left w-full rounded px-2 py-1.5 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text"
-                      style={{ appearance: "none", background: "none" }}
-                    >
-                      <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className={customerProfile?.phone ? "text-foreground" : "text-muted-foreground"}>{customerProfile?.phone || "Add phone"}</span>
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 text-sm text-left w-full rounded px-2 py-1.5 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-pointer"
+                          style={{ appearance: "none", background: "none" }}
+                        >
+                          <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className={customerProfile?.phone ? "text-foreground" : "text-muted-foreground"}>{customerProfile?.phone || "Add phone"}</span>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {customerProfile?.phone && (
+                          <>
+                            <DropdownMenuItem asChild>
+                              <a href={`tel:${customerProfile.phone.replace(/\s/g, "")}`}>
+                                <PhoneCall className="h-4 w-4" />
+                                Call
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <a href={`sms:${customerProfile.phone.replace(/\s/g, "")}`}>
+                                <MessageSquare className="h-4 w-4" />
+                                Text
+                              </a>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => navigator.clipboard.writeText(customerProfile?.phone ?? "")}
+                            >
+                              <Copy className="h-4 w-4" />
+                              Copy
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setEditingContactValue(customerProfile?.phone ?? "");
+                            setEditingContactField("phone");
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          {customerProfile?.phone ? "Edit" : "Add phone"}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </div>
                 <div>
@@ -902,22 +966,59 @@ export default function AdminUserInstallPage() {
                       </div>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        const value = customerProfile?.address ?? [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") ?? "";
-                        setEditingContactValue(value);
-                        setContactClickCaretIndex(getCaretIndexFromClick(e, value.length));
-                        setEditingContactField("address");
-                      }}
-                      className="flex items-center gap-2 text-sm text-left w-full rounded px-2 py-1.5 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text"
-                      style={{ appearance: "none", background: "none" }}
-                    >
-                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                      <span className={customerProfile?.address || customerProfile?.street ? "text-foreground" : "text-muted-foreground"}>
-                        {customerProfile?.address || [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") || "Add address"}
-                      </span>
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 text-sm text-left w-full rounded px-2 py-1.5 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-pointer"
+                          style={{ appearance: "none", background: "none" }}
+                        >
+                          <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className={customerProfile?.address || customerProfile?.street ? "text-foreground" : "text-muted-foreground"}>
+                            {customerProfile?.address || [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") || "Add address"}
+                          </span>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {(customerProfile?.address || customerProfile?.street) && (() => {
+                          const addr = customerProfile?.address ?? [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") ?? "";
+                          const mapsQuery = encodeURIComponent(addr);
+                          return (
+                            <>
+                              <DropdownMenuItem asChild>
+                                <a href={`https://maps.apple.com/?q=${mapsQuery}`} target="_blank" rel="noopener noreferrer">
+                                  <MapPin className="h-4 w-4" />
+                                  Maps
+                                </a>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <a href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`} target="_blank" rel="noopener noreferrer">
+                                  <ExternalLink className="h-4 w-4" />
+                                  Google Maps
+                                </a>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => navigator.clipboard.writeText(addr)}
+                              >
+                                <Copy className="h-4 w-4" />
+                                Copy
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          );
+                        })()}
+                        <DropdownMenuItem
+                          onClick={() => {
+                            const value = customerProfile?.address ?? [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") ?? "";
+                            setEditingContactValue(value);
+                            setEditingContactField("address");
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          {(customerProfile?.address || customerProfile?.street) ? "Edit" : "Add address"}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </div>
               </div>

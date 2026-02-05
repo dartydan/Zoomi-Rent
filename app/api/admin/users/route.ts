@@ -2,6 +2,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { requireAdmin } from "@/lib/admin";
+import { isStaffRole } from "@/lib/staff-role";
 import { getActiveSubscriptionProductName } from "@/lib/stripe-subscription";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ export async function GET() {
 
   try {
     const { data: users } = await clerkClient.users.getUserList({ limit: 100 });
-    const nonAdmins = users.filter((u) => (u.publicMetadata?.role as string) !== "admin");
+    const nonAdmins = users.filter((u) => !isStaffRole(u.publicMetadata?.role as string | undefined));
     let stripe: Stripe | null = null;
     try {
       if (process.env.STRIPE_SECRET_KEY) stripe = getStripe();

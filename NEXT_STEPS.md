@@ -27,7 +27,7 @@ Your credentials are configured. Here’s what to do next.
 
 Admins can update install info (install date, address, notes, photo URLs) for any user.
 
-1. **Make a user an admin:** In [Clerk Dashboard](https://dashboard.clerk.com) → **Users** → select a user → **Public metadata** → add `"role": "admin"` (JSON). Save.
+1. **Make a user an admin or employee:** In [Clerk Dashboard](https://dashboard.clerk.com) → **Users** → select a user → **Public metadata** → add `"role": "admin"` or `"role": "employee"` (JSON). Both roles currently have the same permissions. Save.
 2. **Access admin:** When signed in as that user, the dashboard sidebar shows **Admin**. Go to **Admin** to list users and click **Edit install** to set install date, address, notes, and photo URLs (one URL per line).
 3. **Photo URLs:** Paste image URLs (e.g. from an image host or storage). For file uploads you’d add a separate upload flow (e.g. Vercel Blob) and then paste the resulting URLs here.
 

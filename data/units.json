@@ -1,7 +1,7 @@
 [
   {
     "id": "8febeb88-50f8-425e-ac04-0e5cc1125193",
-    "assignedUserId": "user_38uryi2rcb7oHXcAaIjgDF8Sjgp",
+    "assignedUserId": "user_39F1ArFqdDPs6GXvzQDKRnYlQ5x",
     "washer": {
       "purchaseCost": 200,
       "repairCosts": 0,
@@ -21,7 +21,8 @@
         }
       ],
       "acquisitionDate": "2026-02-02",
-      "notes": "Upldateeddd"
+      "notes": "Upldateeddd",
+      "model": "mn3324"
     },
     "dryer": {
       "purchaseCost": 0,
@@ -30,6 +31,6 @@
       "brand": "Whirlpool"
     },
     "createdAt": "2026-02-05T05:28:39.395Z",
-    "updatedAt": "2026-02-05T06:58:01.100Z"
+    "updatedAt": "2026-02-05T16:58:22.911Z"
   }
 ]

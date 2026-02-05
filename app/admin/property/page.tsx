@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, TrendingUp, User, Home } from "lucide-react";
+import { Plus, TrendingUp, User, Home, ChevronRight } from "lucide-react";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import type { Unit, MachineStatus } from "@/lib/unit";
 
@@ -173,6 +173,10 @@ export default function PropertyPage() {
     return (u.washer.purchaseCost ?? 0) + (u.dryer.purchaseCost ?? 0) + additionalTotal;
   }
 
+  function roi(u: Unit) {
+    return totalRevenue(u) - totalCost(u);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -232,7 +236,104 @@ export default function PropertyPage() {
               <LoadingAnimation />
             </div>
           ) : (
-            <Table className="table-fixed">
+            <>
+              {/* Mobile: location, status, ROI, action */}
+              <div className="block md:hidden divide-y divide-border">
+                {units.length > 0 && (
+                  <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-muted/30">
+                    <div className="w-3 shrink-0" aria-hidden />
+                    <span className="text-xs font-medium text-muted-foreground uppercase flex-1 min-w-0">Location</span>
+                    <span className="text-xs font-medium text-muted-foreground uppercase shrink-0 w-16 text-right">ROI</span>
+                    <div className="w-4 shrink-0" aria-hidden />
+                  </div>
+                )}
+                {units.length === 0 ? (
+                  <div className="py-8 text-center text-muted-foreground">
+                    No units yet. Add one to get started.
+                  </div>
+                ) : (
+                  units.map((u) => {
+                    const dotStatus = getUnitDotStatus(u, userById);
+                    const location = u.assignedUserId
+                      ? userDisplay(userById(u.assignedUserId) ?? { id: u.assignedUserId, email: null, firstName: null, lastName: null })
+                      : "Warehouse";
+                    return (
+                      <div
+                        key={u.id}
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted active:bg-muted transition-colors"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => router.push(`/admin/units/${u.id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            router.push(`/admin/units/${u.id}`);
+                          }
+                        }}
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  title={DOT_LABELS[dotStatus]}
+                                  aria-label={`Status: ${DOT_LABELS[dotStatus]}. Change status.`}
+                                  className={`h-3 w-3 shrink-0 rounded-full border border-border ${DOT_COLORS[dotStatus]} focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer`}
+                                />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start">
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    updateMachineStatus(u.id, "washer", "available");
+                                    updateMachineStatus(u.id, "dryer", "available");
+                                  }}
+                                  disabled={dotStatus === "installed"}
+                                >
+                                  <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-2" />
+                                  Available to install
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    updateMachineStatus(u.id, "washer", "needs_repair");
+                                    updateMachineStatus(u.id, "dryer", "needs_repair");
+                                  }}
+                                >
+                                  <span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />
+                                  Needs repair
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    updateMachineStatus(u.id, "washer", "no_longer_owned");
+                                    updateMachineStatus(u.id, "dryer", "no_longer_owned");
+                                  }}
+                                >
+                                  <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-2" />
+                                  No longer owned
+                                </DropdownMenuItem>
+                                {dotStatus === "installed" && (
+                                  <DropdownMenuItem disabled>
+                                    <span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-2" />
+                                    Installed (automatic when assigned + install date)
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                          <span className="text-sm font-medium truncate min-w-0">{location}</span>
+                          <span className="text-sm text-muted-foreground shrink-0 ml-auto text-right tabular-nums">
+                            {formatCurrency(roi(u))}
+                          </span>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Desktop: full table */}
+              <Table className="table-fixed hidden md:table">
               <TableHeader>
                 <TableRow>
                   <TableHead className="pl-6 w-10" aria-label="Status" />
@@ -356,6 +457,7 @@ export default function PropertyPage() {
                 )}
               </TableBody>
             </Table>
+            </>
           )}
         </CardContent>
       </Card>

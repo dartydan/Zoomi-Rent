@@ -1,10 +1,5 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
-
-const ADMIN_ROLE = "admin";
-
-function getRole(publicMetadata: Record<string, unknown> | null): string | undefined {
-  return publicMetadata?.role as string | undefined;
-}
+import { isStaffRole } from "@/lib/staff-role";
 
 export async function isAdmin(): Promise<boolean> {
   const { userId } = await auth();
@@ -12,11 +7,11 @@ export async function isAdmin(): Promise<boolean> {
     return false;
   }
   const user = await currentUser();
-  return getRole(user?.publicMetadata ?? null) === ADMIN_ROLE;
+  return isStaffRole(user?.publicMetadata?.role as string | undefined);
 }
 
 /**
- * Use in Server Components / API routes. For client, use useUser().publicMetadata?.role === "admin"
+ * Use in Server Components / API routes. For client, use isStaffRole from @/lib/staff-role instead.
  */
 export async function requireAdmin(): Promise<{ userId: string }> {
   const { userId } = await auth();
@@ -24,6 +19,6 @@ export async function requireAdmin(): Promise<{ userId: string }> {
     throw new Error("Unauthorized");
   }
   const user = await currentUser();
-  if (getRole(user?.publicMetadata ?? null) !== ADMIN_ROLE) throw new Error("Forbidden");
+  if (!isStaffRole(user?.publicMetadata?.role as string | undefined)) throw new Error("Forbidden");
   return { userId };
 }
