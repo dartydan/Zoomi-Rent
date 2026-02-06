@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, ExternalLink } from "lucide-react";
+import { Download, ExternalLink, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -51,6 +51,16 @@ function formatDate(timestamp: number): string {
   });
 }
 
+function StatusIcon({ status }: { status: string }) {
+  if (status === "succeeded" || status === "paid") {
+    return <Check className="h-4 w-4 text-green-600 dark:text-green-500" aria-label="Successful payment" />;
+  }
+  if (status === "failed") {
+    return <X className="h-4 w-4 text-destructive" aria-label="Failed payment" />;
+  }
+  return <span className="text-muted-foreground">—</span>;
+}
+
 export function PaymentHistory({ invoices }: PaymentHistoryProps) {
   return (
     <Card className="border-2">
@@ -67,7 +77,8 @@ export function PaymentHistory({ invoices }: PaymentHistoryProps) {
           <>
             {/* Mobile: grid with labels */}
             <div className="block sm:hidden border-t">
-              <div className="grid grid-cols-4 gap-2 px-4 py-3 border-b bg-muted/30 text-sm font-semibold text-muted-foreground">
+              <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-4 py-3 border-b bg-muted/30 text-sm font-semibold text-muted-foreground">
+                <span className="w-6" aria-label="Status" />
                 <span>Date</span>
                 <span>Invoice</span>
                 <span>Amount</span>
@@ -76,8 +87,11 @@ export function PaymentHistory({ invoices }: PaymentHistoryProps) {
               {invoices.map((invoice) => (
                 <div
                   key={invoice.id}
-                  className="grid grid-cols-4 gap-2 px-4 py-3 items-center border-b last:border-b-0 hover:bg-muted/50 transition-colors text-sm min-w-0"
+                  className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-4 py-3 items-center border-b last:border-b-0 hover:bg-muted/50 transition-colors text-sm min-w-0"
                 >
+                  <span className="w-6 flex items-center justify-center">
+                    <StatusIcon status={invoice.status} />
+                  </span>
                   <span className="font-medium truncate" title={formatDate(invoice.created)}>
                     {formatDate(invoice.created)}
                   </span>
@@ -135,7 +149,8 @@ export function PaymentHistory({ invoices }: PaymentHistoryProps) {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent border-b-2">
-                    <TableHead className="font-semibold pl-6">Date</TableHead>
+                    <TableHead className="font-semibold pl-6 w-10" aria-label="Status" />
+                    <TableHead className="font-semibold">Date</TableHead>
                     <TableHead className="font-semibold">Invoice</TableHead>
                     <TableHead className="font-semibold">Amount</TableHead>
                     <TableHead className="text-center font-semibold pr-6">Receipt</TableHead>
@@ -144,7 +159,10 @@ export function PaymentHistory({ invoices }: PaymentHistoryProps) {
                 <TableBody>
                   {invoices.map((invoice) => (
                     <TableRow key={invoice.id} className="hover:bg-muted/50 transition-colors">
-                      <TableCell className="font-medium pl-6 whitespace-nowrap">
+                      <TableCell className="pl-6 w-10">
+                        <StatusIcon status={invoice.status} />
+                      </TableCell>
+                      <TableCell className="font-medium whitespace-nowrap">
                         {formatDate(invoice.created)}
                       </TableCell>
                       <TableCell>
