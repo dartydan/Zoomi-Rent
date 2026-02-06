@@ -569,7 +569,6 @@ export default function PropertyPage() {
                   setDeleting(false);
                 }
               }}
-              disabled={deleting}
             >
               {deleting ? "Deleting…" : "Delete"}
             </Button>
