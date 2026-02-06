@@ -34,6 +34,7 @@ function formatCurrency(amount: number): string {
 }
 
 const PERIODS: FinancesPeriod[] = ["ytd", "this", "last"];
+const TEST_CUSTOMER_EMAIL = "danmorency@gmail.com";
 
 export default async function FinancesPage({
   searchParams,
@@ -47,12 +48,17 @@ export default async function FinancesPage({
 
   const bounds = getFinancesPeriodBounds(period);
   const { startDate, endDate } = getFinancesPeriodDateStrings(period);
-  const [moneyIn, units, manualExpenses, incomingTransactions] = await Promise.all([
-    computeRevenueForDateRange(bounds.start, bounds.end),
+  const [units, manualExpenses, allIncomingTransactions] = await Promise.all([
     readUnits(),
     readManualExpenses(),
     computeRevenueTransactionsForDateRange(bounds.start, bounds.end),
   ]);
+  const incomingTransactions = allIncomingTransactions.filter((t) => {
+    const v = (t.customerName ?? "").toLowerCase();
+    return !v.includes(TEST_CUSTOMER_EMAIL);
+  });
+  const moneyIn = incomingTransactions.reduce((sum, t) => sum + (t.amount ?? 0), 0);
+
   const moneyOut = computeMoneyOutForPeriod(units, manualExpenses, startDate, endDate);
   const expenseTransactions = getExpenseTransactions(units, manualExpenses, startDate, endDate);
   const net = moneyIn - moneyOut;
