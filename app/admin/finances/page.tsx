@@ -1,14 +1,6 @@
 import { Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   computeRevenueForDateRange,
   computeRevenueTransactionsForDateRange,
   getFinancesPeriodBounds,
@@ -23,7 +15,9 @@ import {
 import { readManualExpenses } from "@/lib/manual-expenses-store";
 import { readUnits } from "@/lib/unit-store";
 import { AddExpenseButton } from "./add-expense-button";
+import { ExpensesTable } from "./expenses-table";
 import { FinancesPeriodSelect } from "./finances-period-select";
+import { IncomingTransactionsTable } from "./incoming-transactions-table";
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -125,36 +119,7 @@ export default async function FinancesPage({
             <CardTitle>Incoming Transactions</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {incomingTransactions.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground">
-                      No transactions in period
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  incomingTransactions.map((tx, i) => (
-                    <TableRow key={`${tx.date}-${tx.amount}-${i}`}>
-                      <TableCell>{tx.date}</TableCell>
-                      <TableCell>{tx.customerName}</TableCell>
-                      <TableCell>{tx.type}</TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(tx.amount)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+            <IncomingTransactionsTable transactions={incomingTransactions} />
           </CardContent>
         </Card>
         <Card>
@@ -163,34 +128,7 @@ export default async function FinancesPage({
             <AddExpenseButton />
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {expenseTransactions.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground">
-                      No expenses in period
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  expenseTransactions.map((tx, i) => (
-                    <TableRow key={`${tx.date}-${tx.unitId}-${tx.amount}-${i}`}>
-                      <TableCell>{tx.date}</TableCell>
-                      <TableCell>{tx.description}</TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(tx.amount)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+            <ExpensesTable transactions={expenseTransactions} />
           </CardContent>
         </Card>
       </section>

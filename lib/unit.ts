@@ -9,6 +9,8 @@ export type AdditionalCostEntry = {
   amount: number;
   description: string;
   date?: string; // ISO date string
+  store?: string;
+  receiptUrl?: string;
 };
 
 export type NoteEntry = {

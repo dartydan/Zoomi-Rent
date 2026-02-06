@@ -12,6 +12,9 @@ export type ManualExpense = {
   amount: number;
   description: string;
   createdAt: string; // ISO
+  store?: string;
+  receiptUrl?: string;
+  receiptPhotoUrl?: string;
 };
 
 const DATA_DIR = path.join(process.cwd(), "data");

@@ -24,6 +24,9 @@ export function AddExpenseButton() {
   );
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
+  const [store, setStore] = useState("");
+  const [receiptUrl, setReceiptUrl] = useState("");
+  const [receiptPhotoUrl, setReceiptPhotoUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -40,7 +43,14 @@ export function AddExpenseButton() {
       const res = await fetch("/api/admin/finances/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, description: description.trim(), amount: amt }),
+        body: JSON.stringify({
+          date,
+          description: description.trim(),
+          amount: amt,
+          store: store.trim() || undefined,
+          receiptUrl: receiptUrl.trim() || undefined,
+          receiptPhotoUrl: receiptPhotoUrl.trim() || undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -49,6 +59,9 @@ export function AddExpenseButton() {
       setOpen(false);
       setDescription("");
       setAmount("");
+      setStore("");
+      setReceiptUrl("");
+      setReceiptPhotoUrl("");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add expense");
@@ -102,6 +115,35 @@ export function AddExpenseButton() {
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
               required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="expense-store">Store (optional)</Label>
+            <Input
+              id="expense-store"
+              value={store}
+              onChange={(e) => setStore(e.target.value)}
+              placeholder="e.g. Home Depot"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="expense-receipt-url">Receipt link (optional)</Label>
+            <Input
+              id="expense-receipt-url"
+              type="url"
+              value={receiptUrl}
+              onChange={(e) => setReceiptUrl(e.target.value)}
+              placeholder="https://..."
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="expense-receipt-photo">Photo of receipt (optional)</Label>
+            <Input
+              id="expense-receipt-photo"
+              type="url"
+              value={receiptPhotoUrl}
+              onChange={(e) => setReceiptPhotoUrl(e.target.value)}
+              placeholder="https://..."
             />
           </div>
           {error && (

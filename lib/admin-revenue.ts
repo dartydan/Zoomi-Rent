@@ -152,8 +152,12 @@ export async function computeRevenueTransactionsForDateRange(
         const source = tx.source;
         let customerName = "—";
         let isSubscription = false;
+        let receiptUrl: string | null = null;
         if (source && typeof source === "object" && !("deleted" in source)) {
           const src = source as Stripe.Charge | Stripe.PaymentIntent;
+          if ("receipt_url" in src && typeof src.receipt_url === "string") {
+            receiptUrl = src.receipt_url;
+          }
           const cust = "customer" in src ? src.customer : null;
           if (cust && typeof cust === "object" && cust && !("deleted" in cust)) {
             customerName =
@@ -179,6 +183,8 @@ export async function computeRevenueTransactionsForDateRange(
           dateTimestamp: tx.created ?? 0,
           amount,
           type: isSubscription ? "subscription" : "invoice",
+          receiptUrl,
+          stripeTxId: tx.id,
         });
       }
       hasMore = list.has_more;
@@ -206,6 +212,8 @@ export type RevenueTransaction = {
   dateTimestamp: number; // Unix seconds - format on client in local timezone for correct display
   amount: number;
   type: "subscription" | "invoice"; // subscription = recurring, invoice = one-off
+  receiptUrl: string | null;
+  stripeTxId: string;
 };
 
 export type MonthKey = "last" | "this" | "next";
@@ -242,8 +250,12 @@ export async function computeRevenueTransactions(
           const source = tx.source;
           let customerName = "—";
           let isSubscription = false;
+          let receiptUrl: string | null = null;
           if (source && typeof source === "object" && !("deleted" in source)) {
             const src = source as Stripe.Charge | Stripe.PaymentIntent;
+            if ("receipt_url" in src && typeof src.receipt_url === "string") {
+              receiptUrl = src.receipt_url;
+            }
             const cust = "customer" in src ? src.customer : null;
             if (cust && typeof cust === "object" && cust && !("deleted" in cust)) {
               customerName =
@@ -270,6 +282,8 @@ export async function computeRevenueTransactions(
             dateTimestamp: ts,
             amount,
             type: isSubscription ? "subscription" : "invoice",
+            receiptUrl,
+            stripeTxId: tx.id,
           });
         }
         hasMore = list.has_more;
@@ -325,6 +339,8 @@ export async function computeRevenueTransactions(
             dateTimestamp: dueTs,
             amount,
             type: "invoice",
+            receiptUrl: null,
+            stripeTxId: inv.id,
           });
         }
         invHasMore = invList.has_more;
@@ -412,6 +428,8 @@ export async function computeRevenueTransactions(
             dateTimestamp: paymentTs,
             amount,
             type: "subscription",
+            receiptUrl: null,
+            stripeTxId: sub.id,
           });
         }
         subHasMore = subList.has_more;

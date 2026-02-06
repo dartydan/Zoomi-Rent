@@ -26,6 +26,11 @@ export type ExpenseTransaction = {
   amount: number;
   description: string;
   unitId: string;
+  manualExpenseId?: string;
+  store?: string;
+  receiptUrl?: string;
+  receiptPhotoUrl?: string;
+  acquisitionSource?: string;
 };
 
 /** List of expense transactions in date range. */
@@ -44,6 +49,10 @@ export function getExpenseTransactions(
         amount: e.amount,
         description: e.description,
         unitId: "",
+        manualExpenseId: e.id,
+        store: e.store,
+        receiptUrl: e.receiptUrl,
+        receiptPhotoUrl: e.receiptPhotoUrl,
       });
     }
   }
@@ -58,6 +67,7 @@ export function getExpenseTransactions(
           amount: machine.purchaseCost,
           description: `${machineLabel} acquisition`,
           unitId: unit.id,
+          acquisitionSource: machine.acquisitionSource,
         });
       }
       if (machine.additionalCosts?.length) {
@@ -69,6 +79,8 @@ export function getExpenseTransactions(
               amount: e.amount,
               description: e.description || `${machineLabel} repair`,
               unitId: unit.id,
+              receiptUrl: e.receiptUrl,
+              store: e.store,
             });
           }
         }
