@@ -105,13 +105,16 @@ export async function GET(request: Request) {
     };
     const candidates: NextPayment[] = [];
 
-    const [activeList, trialingList, schedulesList] = await Promise.all([
+    const [activeList, trialingList, pastDueList, incompleteList, schedulesList] = await Promise.all([
       stripe.subscriptions.list({ customer: customerId, status: "active", limit: 10, expand }),
       stripe.subscriptions.list({ customer: customerId, status: "trialing", limit: 10, expand }),
+      stripe.subscriptions.list({ customer: customerId, status: "past_due", limit: 5 }),
+      stripe.subscriptions.list({ customer: customerId, status: "incomplete", limit: 5 }),
       stripe.subscriptionSchedules.list({ customer: customerId, limit: 10 }),
     ]);
 
     const allSubs = [...activeList.data, ...trialingList.data];
+    const hasPastDueOrIncomplete = pastDueList.data.length > 0 || incompleteList.data.length > 0;
     for (const subscription of allSubs) {
       const periodEnd = subscription.current_period_end;
       if (periodEnd < now) continue;
@@ -238,6 +241,16 @@ export async function GET(request: Request) {
       }
     }
     const hasActiveSubscription = allSubs.length > 0;
+    const hasScheduledSubscription = schedulesList.data.some((s) => s.status === "not_started");
+
+    let status: "scheduled" | "success" | "failed" = "scheduled";
+    if (hasPastDueOrIncomplete) {
+      status = "failed";
+    } else if (hasActiveSubscription) {
+      status = "success";
+    } else if (hasScheduledSubscription) {
+      status = "scheduled";
+    }
 
     return NextResponse.json({
       nextPaymentDate,
@@ -246,6 +259,7 @@ export async function GET(request: Request) {
       subscriptionLabel,
       activeCouponLabel,
       activeCouponSavings,
+      status,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

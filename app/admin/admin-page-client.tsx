@@ -374,7 +374,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
           <div className="grid grid-cols-3 gap-6">
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">
-                {revenue.lastMonthName} Revenue
+                {revenue.lastMonthName}
               </p>
               <button
                 type="button"
@@ -391,7 +391,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">
-                {revenue.thisMonthName} Revenue
+                {revenue.thisMonthName}
               </p>
               <button
                 type="button"
@@ -408,7 +408,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">
-                {revenue.nextMonthName} Forecast
+                {revenue.nextMonthName}
               </p>
               <button
                 type="button"
@@ -557,11 +557,18 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                     isToday ? "border-primary/60 bg-primary/5" : "border-border"
                   }`}
                 >
-                  <div className="px-3 py-2 border-b border-border bg-muted/30">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDateForAdd(date);
+                      setIsAddDialogOpen(true);
+                    }}
+                    className="w-full px-3 py-2 border-b border-border bg-muted/30 text-left hover:bg-muted/50 transition-colors"
+                  >
                     <span className={`text-sm font-semibold ${isToday ? "text-primary" : "text-foreground"}`}>
                       {dayLabel}
                     </span>
-                  </div>
+                  </button>
                   <div className="divide-y divide-border">
                     {installsForDay.length > 0 ? (
                       installsForDay.map((install, idx) => (
@@ -610,8 +617,15 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                       : "border-border"
                   }`}
                 >
-                  {/* Date header */}
-                  <div className="flex items-center justify-between mb-2 pb-2 border-b border-border">
+                  {/* Date header - click to add installation */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDateForAdd(date);
+                      setIsAddDialogOpen(true);
+                    }}
+                    className="flex items-center justify-between mb-2 pb-2 border-b border-border w-full text-left hover:bg-muted/50 rounded-t transition-colors -m-3 p-3 mb-2"
+                  >
                     <div>
                       <div className="text-xs font-medium text-muted-foreground uppercase">
                         {dayName}
@@ -620,7 +634,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                         {dayNum}
                       </div>
                     </div>
-                  </div>
+                  </button>
                   
                   {/* Installations list */}
                   <div className="flex-1 space-y-1.5 overflow-y-auto">
@@ -961,6 +975,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
             </DialogDescription>
           </DialogHeader>
           <form
+            noValidate
             onSubmit={async (e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
@@ -1125,7 +1140,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                       id="date"
                       name="date"
                       type="date"
-                      defaultValue={selectedDateForAdd?.toISOString().split("T")[0]}
+                      defaultValue={(selectedDateForAdd ?? new Date()).toISOString().split("T")[0]}
                       required
                       className="pr-28 h-10 rounded-xl border-2 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 hover:border-primary/50 transition-all"
                     />

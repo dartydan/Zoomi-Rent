@@ -279,7 +279,7 @@ export default function CustomersPage() {
               Add as much info as you have. When they sign up with that email, name and address will pre-fill. At least one field is required.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleAddCustomer} className="space-y-4">
+          <form onSubmit={handleAddCustomer} className="space-y-4" noValidate>
             {addError && (
               <p className="text-sm text-destructive" role="alert">
                 {addError}

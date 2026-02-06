@@ -28,6 +28,8 @@ interface Invoice {
   hostedInvoiceUrl: string | null;
 }
 
+type CustomerStatus = "scheduled" | "success" | "failed";
+
 interface DashboardData {
   customerId: string | null;
   invoices: Invoice[];
@@ -37,6 +39,7 @@ interface DashboardData {
   subscriptionLabel: string | null;
   activeCouponLabel: string | null;
   activeCouponSavings: { amount: number; currency: string } | null;
+  status?: CustomerStatus;
 }
 
 type AdminUser = {
@@ -84,6 +87,7 @@ export function DashboardContent() {
         // Mock data for demo purposes
         const mockData: DashboardData = {
           customerId: "demo_customer",
+          status: "success",
           invoices: [
             {
               id: "in_demo_1",
@@ -143,6 +147,7 @@ export function DashboardContent() {
             subscriptionLabel: null,
             activeCouponLabel: null,
             activeCouponSavings: null,
+            status: "scheduled",
           });
           setLoading(false);
           return;
@@ -172,6 +177,7 @@ export function DashboardContent() {
           activeCouponSavings: subscriptionData.activeCouponSavings ?? null,
           hasActiveSubscription: subscriptionData.hasActiveSubscription ?? false,
           subscriptionLabel: subscriptionData.subscriptionLabel ?? null,
+          status: subscriptionData.status ?? "scheduled",
         });
       } catch (err) {
         setError("Failed to load dashboard");
@@ -255,13 +261,26 @@ export function DashboardContent() {
     ? (impersonateUser.firstName ?? "").trim() || null
     : user?.firstName ?? null;
 
+  const statusConfig: Record<CustomerStatus, { label: string; className: string }> = {
+    scheduled: { label: "Scheduled", className: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30" },
+    success: { label: "Success", className: "bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/30" },
+    failed: { label: "Failed", className: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30" },
+  };
+  const status = data?.status ?? "scheduled";
+  const { label: statusLabel, className: statusClassName } = statusConfig[status];
+
   return (
     <div className="flex min-h-full flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-0.5">
-          <h1 className="text-2xl font-bold text-foreground">
-            Welcome{displayFirstName ? `, ${displayFirstName}` : !user && process.env.NODE_ENV === "development" ? ", Demo User" : ""}
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-foreground">
+              Welcome{displayFirstName ? `, ${displayFirstName}` : !user && process.env.NODE_ENV === "development" ? ", Demo User" : ""}
+            </h1>
+            <Badge variant="outline" className={statusClassName}>
+              {statusLabel}
+            </Badge>
+          </div>
           <p className="text-sm text-muted-foreground">
             Manage your washer and dryer rental billing.
           </p>
