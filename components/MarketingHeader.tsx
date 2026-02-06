@@ -10,12 +10,13 @@ import { LogOut, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGetStarted } from "@/components/GetStartedContext";
 
-const SECTION_IDS = ["pricing", "how-it-works", "benefits", "testimonials"] as const;
+// Reviews section commented out – add "testimonials" to SECTION_IDS and NAV_ITEMS to re-enable
+const SECTION_IDS = ["pricing", "how-it-works", "benefits"] as const;
 const NAV_ITEMS: { id: (typeof SECTION_IDS)[number]; label: string }[] = [
   { id: "pricing", label: "Pricing" },
   { id: "how-it-works", label: "How It Works" },
   { id: "benefits", label: "Benefits" },
-  { id: "testimonials", label: "Reviews" },
+  // { id: "testimonials", label: "Reviews" },
 ];
 
 type MarketingHeaderProps = {

@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { MarketingHeader } from "@/components/MarketingHeader";
 import { SplashHero } from "@/components/SplashHero";
 import { BenefitsWithIcons } from "@/components/BenefitsWithIcons";
-import { TestimonialsCarousel } from "@/components/TestimonialsCarousel";
+// import { TestimonialsCarousel } from "@/components/TestimonialsCarousel";
 import { PricingCalculator } from "@/components/PricingCalculator";
 import { HowItWorksTimeline } from "@/components/HowItWorksTimeline";
 import { Button } from "@/components/ui/button";
@@ -111,29 +111,30 @@ function PricingSection() {
   );
 }
 
-function TestimonialsSection() {
-  return (
-    <section id="testimonials" className="px-4 py-20 sm:py-24" aria-labelledby="testimonials-heading">
-      <div className="mx-auto max-w-4xl space-y-12">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="text-center space-y-4"
-        >
-          <h2 id="testimonials-heading" className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            What Our Customers Say
-          </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Real reviews from real customers
-          </p>
-        </motion.div>
-        <TestimonialsCarousel />
-      </div>
-    </section>
-  );
-}
+// Reviews section – uncomment to re-enable
+// function TestimonialsSection() {
+//   return (
+//     <section id="testimonials" className="px-4 py-20 sm:py-24" aria-labelledby="testimonials-heading">
+//       <div className="mx-auto max-w-4xl space-y-12">
+//         <motion.div
+//           initial={{ opacity: 0, y: 20 }}
+//           whileInView={{ opacity: 1, y: 0 }}
+//           viewport={{ once: true }}
+//           transition={{ duration: 0.6 }}
+//           className="text-center space-y-4"
+//         >
+//           <h2 id="testimonials-heading" className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+//             What Our Customers Say
+//           </h2>
+//           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+//             Real reviews from real customers
+//           </p>
+//         </motion.div>
+//         <TestimonialsCarousel />
+//       </div>
+//     </section>
+//   );
+// }
 
 function CTASection() {
   const { openGetStarted } = useGetStarted();
@@ -218,7 +219,7 @@ export default function Home() {
           <BenefitsWithIcons />
         </div>
         <PhotoGallerySection />
-        <TestimonialsSection />
+        {/* <TestimonialsSection /> */}
         <CTASection />
         <MarketingFooter />
       </div>
