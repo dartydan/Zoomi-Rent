@@ -7,3 +7,8 @@ const STAFF_ROLES = ["admin", "employee"] as const;
 export function isStaffRole(role: string | undefined): boolean {
   return role !== undefined && STAFF_ROLES.includes(role as (typeof STAFF_ROLES)[number]);
 }
+
+/** True only for admin role. Employees can view but not edit. */
+export function canEdit(role: string | undefined): boolean {
+  return role === "admin";
+}

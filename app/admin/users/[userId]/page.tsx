@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useCanEdit } from "../../can-edit-context";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,6 +81,7 @@ function combineInstallAddress(parts: { street: string; city: string; state: str
 export default function AdminUserInstallPage() {
   const params = useParams();
   const router = useRouter();
+  const canEdit = useCanEdit();
   const userId = params.userId as string;
   const [data, setData] = useState<InstallInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -678,7 +680,9 @@ export default function AdminUserInstallPage() {
           ) : (
             <button
               type="button"
+              disabled={!canEdit}
               onClick={(e) => {
+                if (!canEdit) return;
                 const display = loading ? "Customer" : displayName;
                 setEditedNameValue(display);
                 let index = display.length;
@@ -692,7 +696,7 @@ export default function AdminUserInstallPage() {
                 setNameClickCaretIndex(Math.max(0, Math.min(index, display.length)));
                 setEditingName(true);
               }}
-              className="text-left text-2xl font-bold text-foreground rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text"
+              className="text-left text-2xl font-bold text-foreground rounded px-1 -mx-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-text disabled:cursor-default disabled:opacity-100"
               style={{ appearance: "none", background: "none" }}
             >
               {loading ? "Customer" : displayName}
@@ -823,9 +827,11 @@ export default function AdminUserInstallPage() {
                         )}
                         <DropdownMenuItem
                           onClick={() => {
+                            if (!canEdit) return;
                             setEditingContactValue(customerProfile?.email ?? "");
                             setEditingContactField("email");
                           }}
+                          disabled={!canEdit}
                         >
                           <Pencil className="h-4 w-4" />
                           {customerProfile?.email ? "Edit" : "Add email"}
@@ -907,9 +913,11 @@ export default function AdminUserInstallPage() {
                         )}
                         <DropdownMenuItem
                           onClick={() => {
+                            if (!canEdit) return;
                             setEditingContactValue(customerProfile?.phone ?? "");
                             setEditingContactField("phone");
                           }}
+                          disabled={!canEdit}
                         >
                           <Pencil className="h-4 w-4" />
                           {customerProfile?.phone ? "Edit" : "Add phone"}
@@ -1009,10 +1017,12 @@ export default function AdminUserInstallPage() {
                         })()}
                         <DropdownMenuItem
                           onClick={() => {
+                            if (!canEdit) return;
                             const value = customerProfile?.address ?? [customerProfile?.street, customerProfile?.city, customerProfile?.state, customerProfile?.zip].filter(Boolean).join(", ") ?? "";
                             setEditingContactValue(value);
                             setEditingContactField("address");
                           }}
+                          disabled={!canEdit}
                         >
                           <Pencil className="h-4 w-4" />
                           {(customerProfile?.address || customerProfile?.street) ? "Edit" : "Add address"}
@@ -1039,7 +1049,7 @@ export default function AdminUserInstallPage() {
                     ? setUnitDialogOpen(true)
                     : !userId.startsWith("pending_") && openAssignUnitDialog()
                 }
-                disabled={userId.startsWith("pending_")}
+                disabled={!canEdit || userId.startsWith("pending_")}
                 className={
                   assignedUnit
                     ? "flex w-full min-h-[72px] items-center justify-center gap-2 rounded-md border border-green-600 dark:border-green-500 bg-green-50 dark:bg-green-950/40 px-4 py-3 text-sm font-medium text-green-800 dark:text-green-200 hover:bg-green-100 dark:hover:bg-green-900/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 cursor-pointer"
@@ -1087,7 +1097,8 @@ export default function AdminUserInstallPage() {
                         key={rec.id}
                         type="button"
                         onClick={() => openInstallDialog(rec.id)}
-                        className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        disabled={!canEdit}
+                        className="inline-flex items-center gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-background"
                       >
                         <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                         {parseDateForDisplay(rec.installDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST })}
@@ -1111,6 +1122,7 @@ export default function AdminUserInstallPage() {
                       variant="outline"
                       size="sm"
                       className="h-8 w-8 p-0 shrink-0"
+                      disabled={!canEdit}
                       onClick={() => openInstallDialog(null)}
                       aria-label="Add install"
                     >
@@ -1123,6 +1135,7 @@ export default function AdminUserInstallPage() {
                     type="button"
                     variant="outline"
                     size="sm"
+                    disabled={!canEdit}
                     onClick={() => openInstallDialog(null)}
                     className="gap-2"
                   >
@@ -1311,7 +1324,7 @@ export default function AdminUserInstallPage() {
                 </div>
               </div>
             </div>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={!canEdit || saving}>
               {saving ? "Saving…" : "Save"}
             </Button>
           </CardContent>
@@ -1457,7 +1470,7 @@ export default function AdminUserInstallPage() {
                   type="button"
                   variant="destructive"
                   className="mr-auto"
-                  disabled={saving || deleteInstallLoading}
+                  disabled={!canEdit || saving || deleteInstallLoading}
                   onClick={handleDeleteInstall}
                 >
                   {deleteInstallLoading ? "Deleting…" : (
@@ -1471,7 +1484,7 @@ export default function AdminUserInstallPage() {
               <Button type="button" variant="outline" onClick={closeInstallDialog}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" disabled={!canEdit || saving}>
                 {saving ? "Saving…" : "Save"}
               </Button>
             </DialogFooter>
@@ -1728,7 +1741,7 @@ export default function AdminUserInstallPage() {
                   variant="outline"
                   size="sm"
                   onClick={handleSendToWarehouse}
-                  disabled={uninstallLoading}
+                  disabled={!canEdit || uninstallLoading}
                 >
                   {uninstallLoading ? "Sending…" : "Send to warehouse"}
                 </Button>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
-import { requireAdmin } from "@/lib/admin";
+import { requireCanEdit } from "@/lib/admin";
 import { getUnitById, updateUnit } from "@/lib/unit-store";
 import type { Unit } from "@/lib/unit";
 import type { InstallInfo, InstallRecord } from "@/lib/install";
@@ -13,7 +13,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin();
+    await requireCanEdit();
   } catch {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

@@ -22,6 +22,175 @@ function getMonthName(monthOffset: number): string {
   return d.toLocaleString("en-US", { month: "long", timeZone: "America/New_York" });
 }
 
+/** YTD: Jan 1 00:00 America/New_York through now. */
+function getYearToDateBounds(): { start: number; end: number } {
+  const now = new Date();
+  const year = now.getFullYear();
+  const start = Math.floor(new Date(`${year}-01-01T05:00:00.000Z`).getTime() / 1000);
+  const end = Math.floor(now.getTime() / 1000);
+  return { start, end };
+}
+
+export type FinancesPeriod = "this" | "last" | "ytd";
+
+export function getFinancesPeriodBounds(period: FinancesPeriod): { start: number; end: number } {
+  if (period === "this") return getMonthBounds(0);
+  if (period === "last") return getMonthBounds(-1);
+  return getYearToDateBounds();
+}
+
+/** Date strings (YYYY-MM-DD) for period, America/New_York. Use for date-only comparison. */
+export function getFinancesPeriodDateStrings(period: FinancesPeriod): {
+  startDate: string;
+  endDate: string;
+} {
+  const tz = "America/New_York";
+  const now = new Date();
+  const year = now.getFullYear();
+
+  if (period === "ytd") {
+    return {
+      startDate: `${year}-01-01`,
+      endDate: now.toLocaleDateString("en-CA", { timeZone: tz }),
+    };
+  }
+  const m = period === "this" ? now.getMonth() : now.getMonth() - 1;
+  const monthStart = new Date(year, m, 1, 12, 0, 0, 0);
+  const monthEnd = new Date(year, m + 1, 0, 12, 0, 0, 0);
+  return {
+    startDate: monthStart.toLocaleDateString("en-CA", { timeZone: tz }),
+    endDate: monthEnd.toLocaleDateString("en-CA", { timeZone: tz }),
+  };
+}
+
+export function getFinancesPeriodLabel(period: FinancesPeriod): string {
+  if (period === "this") return "This month";
+  if (period === "last") return "Previous month";
+  return "Year to date";
+}
+
+/** Sum of received revenue (charge, payment) in the given date range. */
+export async function computeRevenueForDateRange(
+  startTs: number,
+  endTs: number
+): Promise<number> {
+  const stripe = getStripe();
+  let total = 0;
+  if (!stripe) return total;
+
+  const incomeTypes = ["charge", "payment", "refund"] as const;
+  for (const txType of incomeTypes) {
+    let hasMore = true;
+    let startingAfter: string | undefined;
+    while (hasMore) {
+      const list = await stripe.balanceTransactions.list({
+        type: txType,
+        created: { gte: startTs, lte: endTs },
+        limit: 100,
+        ...(startingAfter && { starting_after: startingAfter }),
+      });
+      for (const tx of list.data) {
+        total += (tx.amount ?? 0) / 100;
+      }
+      hasMore = list.has_more;
+      if (list.data.length > 0) startingAfter = list.data[list.data.length - 1].id;
+      else hasMore = false;
+    }
+  }
+
+  if (total === 0) {
+    let invHasMore = true;
+    let invStart: string | undefined;
+    const createdSince = startTs - 86400 * 365;
+    while (invHasMore) {
+      const invList = await stripe.invoices.list({
+        status: "paid",
+        limit: 100,
+        created: { gte: createdSince },
+        ...(invStart && { starting_after: invStart }),
+      });
+      for (const inv of invList.data) {
+        const paidAt = inv.status_transitions?.paid_at ?? inv.created;
+        if (paidAt >= startTs && paidAt <= endTs) {
+          total += (inv.amount_paid ?? 0) / 100;
+        }
+      }
+      invHasMore = invList.has_more;
+      if (invList.data.length > 0) invStart = invList.data[invList.data.length - 1].id;
+      else invHasMore = false;
+    }
+  }
+
+  return total;
+}
+
+/** List of received transactions (charge, payment, refund) in date range. */
+export async function computeRevenueTransactionsForDateRange(
+  startTs: number,
+  endTs: number
+): Promise<RevenueTransaction[]> {
+  const stripe = getStripe();
+  const transactions: RevenueTransaction[] = [];
+
+  if (!stripe) return transactions;
+
+  const incomeTypes = ["charge", "payment", "refund"] as const;
+  for (const txType of incomeTypes) {
+    let hasMore = true;
+    let startingAfter: string | undefined;
+    while (hasMore) {
+      const list = await stripe.balanceTransactions.list({
+        type: txType,
+        created: { gte: startTs, lte: endTs },
+        limit: 100,
+        expand: ["data.source", "data.source.invoice"],
+        ...(startingAfter && { starting_after: startingAfter }),
+      });
+      for (const tx of list.data) {
+        const amount = (tx.amount ?? 0) / 100;
+        const dateStr = new Date((tx.created ?? 0) * 1000).toISOString().split("T")[0];
+        const source = tx.source;
+        let customerName = "—";
+        let isSubscription = false;
+        if (source && typeof source === "object" && !("deleted" in source)) {
+          const src = source as Stripe.Charge | Stripe.PaymentIntent;
+          const cust = "customer" in src ? src.customer : null;
+          if (cust && typeof cust === "object" && cust && !("deleted" in cust)) {
+            customerName =
+              (cust as Stripe.Customer).name ?? (cust as Stripe.Customer).email ?? "—";
+          } else if (typeof cust === "string") {
+            try {
+              const c = await stripe.customers.retrieve(cust);
+              if (c && !("deleted" in c)) {
+                customerName = c.name ?? c.email ?? "—";
+              }
+            } catch {
+              // ignore
+            }
+          }
+          const inv = "invoice" in src ? src.invoice : null;
+          if (inv && typeof inv === "object" && inv && !("deleted" in inv)) {
+            isSubscription = !!(inv as Stripe.Invoice).subscription;
+          }
+        }
+        transactions.push({
+          customerName: String(customerName).trim() || "—",
+          date: dateStr,
+          dateTimestamp: tx.created ?? 0,
+          amount,
+          type: isSubscription ? "subscription" : "invoice",
+        });
+      }
+      hasMore = list.has_more;
+      if (list.data.length > 0) startingAfter = list.data[list.data.length - 1].id;
+      else hasMore = false;
+    }
+  }
+
+  transactions.sort((a, b) => a.date.localeCompare(b.date));
+  return transactions;
+}
+
 export type AdminRevenueData = {
   lastMonthRevenue: number;
   lastMonthName: string;

@@ -1,7 +1,7 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { requireAdmin } from "@/lib/admin";
+import { getAuthWithEdit } from "@/lib/admin";
 import { isStaffRole } from "@/lib/staff-role";
 import { getActiveSubscriptionProductName } from "@/lib/stripe-subscription";
 
@@ -14,8 +14,10 @@ function getStripe(): Stripe {
 }
 
 export async function GET() {
+  let canEdit = false;
   try {
-    await requireAdmin();
+    const auth = await getAuthWithEdit();
+    canEdit = auth.canEdit;
   } catch {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -115,7 +117,7 @@ export async function GET() {
       list.map((u) => u.stripeCustomerId).filter(Boolean) as string[]
     );
 
-    if (stripe) {
+    if (canEdit && stripe) {
       let hasMore = true;
       let startingAfter: string | undefined;
       while (hasMore) {

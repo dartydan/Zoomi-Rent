@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin";
+import { requireCanEdit } from "@/lib/admin";
 import { sendNewCustomerEmail } from "@/lib/send-new-customer-email";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /** Sends a test "New Customer" email to verify Resend is configured. Admin only. */
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireCanEdit();
   } catch {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

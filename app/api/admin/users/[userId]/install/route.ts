@@ -1,7 +1,7 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { requireAdmin } from "@/lib/admin";
+import { requireAdmin, requireCanEdit } from "@/lib/admin";
 import type { InstallInfo, InstallRecord } from "@/lib/install";
 import { INSTALL_METADATA_KEY } from "@/lib/install";
 import {
@@ -164,7 +164,7 @@ export async function PATCH(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    await requireAdmin();
+    await requireCanEdit();
   } catch {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -332,7 +332,7 @@ export async function DELETE(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    await requireAdmin();
+    await requireCanEdit();
   } catch {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

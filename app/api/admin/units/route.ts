@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin";
+import { requireAdmin, requireCanEdit } from "@/lib/admin";
 import { readUnits, createUnit, getUnitByUserId } from "@/lib/unit-store";
 import { computeRevenueForAssignedUser } from "@/lib/property-revenue";
 import type { Unit } from "@/lib/unit";
@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireCanEdit();
   } catch {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

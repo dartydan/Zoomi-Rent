@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
-import { requireAdmin } from "@/lib/admin";
+import { requireCanEdit } from "@/lib/admin";
 import type { InstallInfo, InstallRecord } from "@/lib/install";
 import { INSTALL_METADATA_KEY } from "@/lib/install";
 
@@ -22,7 +22,7 @@ export async function PATCH(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    await requireAdmin();
+    await requireCanEdit();
   } catch {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

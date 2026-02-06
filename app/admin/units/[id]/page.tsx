@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useCanEdit } from "../../can-edit-context";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,7 @@ const DOT_LABELS: Record<DotStatus, string> = {
 export default function UnitDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const canEdit = useCanEdit();
   const id = params.id as string;
   const [unit, setUnit] = useState<Unit | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -378,7 +380,7 @@ export default function UnitDetailsPage() {
                   updateMachineStatus(unit.id, "washer", "available");
                   updateMachineStatus(unit.id, "dryer", "available");
                 }}
-                disabled={dotStatus === "installed"}
+                disabled={!canEdit || dotStatus === "installed"}
               >
                 <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-2" />
                 Available to install
@@ -388,6 +390,7 @@ export default function UnitDetailsPage() {
                   updateMachineStatus(unit.id, "washer", "needs_repair");
                   updateMachineStatus(unit.id, "dryer", "needs_repair");
                 }}
+                disabled={!canEdit}
               >
                 <span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />
                 Needs repair
@@ -397,6 +400,7 @@ export default function UnitDetailsPage() {
                   updateMachineStatus(unit.id, "washer", "no_longer_owned");
                   updateMachineStatus(unit.id, "dryer", "no_longer_owned");
                 }}
+                disabled={!canEdit}
               >
                 <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-2" />
                 No longer owned
@@ -471,6 +475,7 @@ export default function UnitDetailsPage() {
             <Button
               variant="outline"
               size="sm"
+              disabled={!canEdit}
               onClick={() => setConnectCustomerDialogOpen(true)}
             >
               <Plus className="h-4 w-4 mr-1" />
@@ -481,15 +486,16 @@ export default function UnitDetailsPage() {
               variant="outline"
               size="sm"
               onClick={handleSendToWarehouse}
-              disabled={sendToWarehouseLoading}
+              disabled={!canEdit || sendToWarehouseLoading}
             >
               {sendToWarehouseLoading ? "Sending…" : "Send to warehouse"}
             </Button>
           )}
           <button
             type="button"
-            className="absolute top-0 right-0 sm:static text-destructive p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+            className="absolute top-0 right-0 sm:static text-destructive p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => setDeleteDialogOpen(true)}
+            disabled={!canEdit}
             aria-label="Delete unit"
           >
             <Trash2 className="h-4 w-4" />
@@ -509,6 +515,7 @@ export default function UnitDetailsPage() {
             <Button
               variant="outline"
               className="relative flex-1 justify-start h-auto py-3 px-4 overflow-hidden border-border"
+              disabled={!canEdit}
               onClick={() => setMachineDialogSlot("washer")}
               aria-label={`Washer, ${deviceInfoProgress(unit.washer.brand, unit.washer.model)}% complete`}
             >
@@ -527,6 +534,7 @@ export default function UnitDetailsPage() {
             <Button
               variant="outline"
               className="relative flex-1 justify-start h-auto py-3 px-4 overflow-hidden border-border"
+              disabled={!canEdit}
               onClick={() => setMachineDialogSlot("dryer")}
               aria-label={`Dryer, ${deviceInfoProgress(unit.dryer.brand, unit.dryer.model)}% complete`}
             >
@@ -646,8 +654,9 @@ export default function UnitDetailsPage() {
                   </div>
                   <DialogFooter>
                     <Button
+                      disabled={!canEdit}
                       onClick={() => {
-                        if (!machineDialogSlot) return;
+                        if (!machineDialogSlot || !canEdit) return;
                         const brand = machineDialogBrandRef.current?.value.trim() || undefined;
                         const model = machineDialogModelRef.current?.value.trim() || undefined;
                         const notes = machineDialogNotesRef.current?.value.trim() || undefined;
@@ -679,6 +688,7 @@ export default function UnitDetailsPage() {
                 variant="outline"
                 size="icon"
                 className="shrink-0 h-8 w-8"
+                disabled={!canEdit}
                 onClick={() => setAddNoteOpen(true)}
                 aria-label="Add note"
               >
@@ -735,7 +745,7 @@ export default function UnitDetailsPage() {
                 <Button variant="outline" onClick={() => setAddNoteOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleAddNote} disabled={!addNoteText.trim()}>
+                <Button onClick={handleAddNote} disabled={!canEdit || !addNoteText.trim()}>
                   Add
                 </Button>
               </DialogFooter>
@@ -777,6 +787,7 @@ export default function UnitDetailsPage() {
                       setInfoEditingField={setInfoEditingField}
                       inlineInputRef={inlineInputRef}
                       label="Cost"
+                      canEdit={canEdit}
                     />
                   </div>
                   <div className="shrink-0">
@@ -791,6 +802,7 @@ export default function UnitDetailsPage() {
                       setInfoEditingField={setInfoEditingField}
                       inlineInputRef={inlineInputRef}
                       format="date"
+                      canEdit={canEdit}
                     />
                   </div>
                   <div className="shrink-0 min-w-0">
@@ -799,12 +811,13 @@ export default function UnitDetailsPage() {
                       slot="washer"
                       field="acquisitionSource"
                       label="Location"
-                    formatCurrency={formatCurrency}
-                    patchUnit={patchUnit}
-                    infoEditingField={infoEditingField}
-                    setInfoEditingField={setInfoEditingField}
-                    inlineInputRef={inlineInputRef}
-                  />
+                      formatCurrency={formatCurrency}
+                      patchUnit={patchUnit}
+                      infoEditingField={infoEditingField}
+                      setInfoEditingField={setInfoEditingField}
+                      inlineInputRef={inlineInputRef}
+                      canEdit={canEdit}
+                    />
                   </div>
                 </div>
               </div>
@@ -813,6 +826,7 @@ export default function UnitDetailsPage() {
                 formatCurrency={formatCurrency}
                 patchUnit={patchUnit}
                 load={load}
+                canEdit={canEdit}
               />
             </CardContent>
           </Card>
@@ -883,7 +897,9 @@ export default function UnitDetailsPage() {
             </Button>
             <Button
               variant="destructive"
+              disabled={!canEdit || deleteLoading}
               onClick={async () => {
+                if (!canEdit) return;
                 setDeleteLoading(true);
                 setError(null);
                 try {
@@ -1135,11 +1151,13 @@ function AdditionalCostsField({
   formatCurrency,
   patchUnit,
   load,
+  canEdit = true,
 }: {
   unit: Unit;
   formatCurrency: (n: number) => string;
   patchUnit: (id: string, p: { washer?: Partial<MachineInfo>; dryer?: Partial<MachineInfo> }) => Promise<Unit | null>;
   load: () => Promise<void>;
+  canEdit?: boolean;
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [addAmount, setAddAmount] = useState("");
@@ -1194,6 +1212,7 @@ function AdditionalCostsField({
           variant="outline"
           size="sm"
           className="h-8 gap-1 shrink-0"
+          disabled={!canEdit}
           onClick={() => {
             setAddDate(new Date().toISOString().slice(0, 10));
             setAddOpen(true);
@@ -1218,8 +1237,9 @@ function AdditionalCostsField({
             <div className="flex items-center shrink-0">
               <button
                 type="button"
-                onClick={() => handleRemove(i)}
-                className="text-muted-foreground hover:text-destructive p-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => canEdit && handleRemove(i)}
+                disabled={!canEdit}
+                className="text-muted-foreground hover:text-destructive p-0.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted-foreground"
                 aria-label={`Remove ${e.description}`}
               >
                 <X className="h-3.5 w-3.5" />
@@ -1279,7 +1299,7 @@ function AdditionalCostsField({
             <Button
               type="button"
               onClick={handleAdd}
-              disabled={Number.isNaN(parseFloat(addAmount)) || parseFloat(addAmount) < 0}
+              disabled={!canEdit || Number.isNaN(parseFloat(addAmount)) || parseFloat(addAmount) < 0}
             >
               Add
             </Button>
@@ -1300,6 +1320,7 @@ function EditableUnitCostField({
   inlineInputRef,
   compact,
   label: labelProp,
+  canEdit = true,
 }: {
   unit: Unit;
   field: "acquisition" | "additional";
@@ -1310,6 +1331,7 @@ function EditableUnitCostField({
   inlineInputRef: React.RefObject<HTMLInputElement>;
   compact?: boolean;
   label?: string;
+  canEdit?: boolean;
 }) {
   const value = field === "acquisition" ? (unit.washer.purchaseCost ?? 0) : (unit.washer.repairCosts ?? 0);
   const isEditing = infoEditingField?.slot === "unit" && infoEditingField?.field === field;
@@ -1341,7 +1363,7 @@ function EditableUnitCostField({
       }}
       autoFocus
     />
-  ) : (
+  ) : canEdit ? (
         <button
           type="button"
           className="text-sm text-left hover:bg-muted rounded px-2 py-1 -mx-2 block w-full whitespace-nowrap"
@@ -1349,6 +1371,8 @@ function EditableUnitCostField({
         >
           {formatCurrency(value)}
         </button>
+  ) : (
+        <span className="text-sm block px-2 py-1 -mx-2 whitespace-nowrap">{formatCurrency(value)}</span>
   );
 
   if (compact) {
@@ -1380,6 +1404,7 @@ function EditableMachineField({
   inlineInputRef,
   format,
   compact,
+  canEdit = true,
 }: {
   unit: Unit;
   slot: "washer" | "dryer";
@@ -1392,6 +1417,7 @@ function EditableMachineField({
   inlineInputRef: React.RefObject<HTMLInputElement>;
   format?: "currency" | "date";
   compact?: boolean;
+  canEdit?: boolean;
 }) {
   const machine = unit[slot];
   const value = machine[field];
@@ -1454,7 +1480,7 @@ function EditableMachineField({
       }}
       autoFocus
     />
-  ) : (
+  ) : canEdit ? (
     <button
       type="button"
       className={`text-sm text-left hover:bg-muted rounded px-2 py-1 -mx-2 whitespace-nowrap ${compact ? "block" : "block w-full"}`}
@@ -1462,6 +1488,8 @@ function EditableMachineField({
     >
       {displayValue}
     </button>
+  ) : (
+    <span className={`text-sm block px-2 py-1 -mx-2 whitespace-nowrap ${compact ? "" : "w-full"}`}>{displayValue}</span>
   );
 
   if (compact) {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useCanEdit } from "../can-edit-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -84,6 +85,7 @@ const DOT_LABELS: Record<DotStatus, string> = {
 
 export default function PropertyPage() {
   const router = useRouter();
+  const canEdit = useCanEdit();
   const [units, setUnits] = useState<Unit[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -200,7 +202,7 @@ export default function PropertyPage() {
         <Button
           type="button"
           variant="outline"
-          disabled={creating}
+          disabled={!canEdit || creating}
           onClick={async () => {
             setCreating(true);
             setError(null);
@@ -299,7 +301,7 @@ export default function PropertyPage() {
                                     updateMachineStatus(u.id, "washer", "available");
                                     updateMachineStatus(u.id, "dryer", "available");
                                   }}
-                                  disabled={dotStatus === "installed"}
+                                  disabled={!canEdit || dotStatus === "installed"}
                                 >
                                   <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-2" />
                                   Available to install
@@ -309,6 +311,7 @@ export default function PropertyPage() {
                                     updateMachineStatus(u.id, "washer", "needs_repair");
                                     updateMachineStatus(u.id, "dryer", "needs_repair");
                                   }}
+                                  disabled={!canEdit}
                                 >
                                   <span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />
                                   Needs repair
@@ -318,6 +321,7 @@ export default function PropertyPage() {
                                     updateMachineStatus(u.id, "washer", "no_longer_owned");
                                     updateMachineStatus(u.id, "dryer", "no_longer_owned");
                                   }}
+                                  disabled={!canEdit}
                                 >
                                   <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-2" />
                                   No longer owned
@@ -351,6 +355,7 @@ export default function PropertyPage() {
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
                                 onClick={() => setDeleteTarget(u)}
+                                disabled={!canEdit}
                               >
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 Delete unit
@@ -416,7 +421,7 @@ export default function PropertyPage() {
                                   updateMachineStatus(u.id, "washer", "available");
                                   updateMachineStatus(u.id, "dryer", "available");
                                 }}
-                                disabled={dotStatus === "installed"}
+                                disabled={!canEdit || dotStatus === "installed"}
                               >
                                 <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-2" />
                                 Available to install
@@ -426,6 +431,7 @@ export default function PropertyPage() {
                                   updateMachineStatus(u.id, "washer", "needs_repair");
                                   updateMachineStatus(u.id, "dryer", "needs_repair");
                                 }}
+                                disabled={!canEdit}
                               >
                                 <span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />
                                 Needs repair
@@ -435,6 +441,7 @@ export default function PropertyPage() {
                                   updateMachineStatus(u.id, "washer", "no_longer_owned");
                                   updateMachineStatus(u.id, "dryer", "no_longer_owned");
                                 }}
+                                disabled={!canEdit}
                               >
                                 <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-2" />
                                 No longer owned
@@ -481,6 +488,7 @@ export default function PropertyPage() {
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
                                 onClick={() => setDeleteTarget(u)}
+                                disabled={!canEdit}
                               >
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 Delete unit
@@ -542,8 +550,9 @@ export default function PropertyPage() {
             </Button>
             <Button
               variant="destructive"
+              disabled={!canEdit || deleting}
               onClick={async () => {
-                if (!deleteTarget) return;
+                if (!deleteTarget || !canEdit) return;
                 setDeleting(true);
                 setDeleteError(null);
                 try {

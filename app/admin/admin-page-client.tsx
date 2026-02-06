@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useCanEdit } from "./can-edit-context";
 import type { AdminRevenueData, RevenueTransaction } from "@/lib/admin-revenue";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -48,6 +49,7 @@ type Customer = {
 };
 
 export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
+  const canEdit = useCanEdit();
   const [installs, setInstalls] = useState<Install[]>([]);
   const [installsLoading, setInstallsLoading] = useState(true);
   const [selectedInstall, setSelectedInstall] = useState<Install | null>(null);
@@ -537,10 +539,12 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                   <button
                     type="button"
                     onClick={() => {
+                      if (!canEdit) return;
                       setSelectedDateForAdd(date);
                       setIsAddDialogOpen(true);
                     }}
-                    className="w-full px-3 py-2 border-b border-border bg-muted/30 text-left hover:bg-muted/50 transition-colors"
+                    disabled={!canEdit}
+                    className="w-full px-3 py-2 border-b border-border bg-muted/30 text-left hover:bg-muted/50 transition-colors disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:bg-muted/30"
                   >
                     <span className={`text-sm font-semibold ${isToday ? "text-primary" : "text-foreground"}`}>
                       {dayLabel}
@@ -598,10 +602,12 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                   <button
                     type="button"
                     onClick={() => {
+                      if (!canEdit) return;
                       setSelectedDateForAdd(date);
                       setIsAddDialogOpen(true);
                     }}
-                    className="flex items-center justify-between mb-2 pb-2 border-b border-border w-full text-left hover:bg-muted/50 rounded-t transition-colors -m-3 p-3 mb-2"
+                    disabled={!canEdit}
+                    className="flex items-center justify-between mb-2 pb-2 border-b border-border w-full text-left hover:bg-muted/50 rounded-t transition-colors -m-3 p-3 mb-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                   >
                     <div>
                       <div className="text-xs font-medium text-muted-foreground uppercase">
@@ -723,7 +729,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                               if (e.key === "Enter") {
                                 e.preventDefault();
                                 setEditingInstallDate(false);
-                                if (selectedInstall?.userId) {
+                                if (canEdit && selectedInstall?.userId) {
                                   setInstallDateSaving(true);
                                   const installDateStr = estDateTimeToISO(editDateValue, editTimeValue || "08:00");
                                   fetch(`/api/admin/users/${selectedInstall.userId}/install-date`, {
@@ -748,8 +754,9 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 shrink-0"
-                            disabled={installDateSaving}
+                            disabled={!canEdit || installDateSaving}
                             onClick={() => {
+                              if (!canEdit) return;
                               setEditingInstallDate(false);
                               const dateVal = editDateValueRef.current;
                               const timeVal = editTimeValueRef.current || "08:00";
@@ -782,7 +789,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                             year: "numeric",
                             timeZone: EST,
                           })}
-                          {selectedInstall.userId && (
+                          {selectedInstall.userId && canEdit && (
                             <button
                               type="button"
                               onClick={() => {
@@ -815,8 +822,9 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 shrink-0"
-                            disabled={installDateSaving}
+                            disabled={!canEdit || installDateSaving}
                             onClick={() => {
+                              if (!canEdit) return;
                               setEditingInstallTime(false);
                               const datePart = editDateValueRef.current || selectedInstall.date.toLocaleDateString("sv-SE", { timeZone: EST });
                               const timeVal = editTimeValueRef.current;
@@ -844,7 +852,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                       ) : (
                         <>
                           {selectedInstall.time}
-                          {selectedInstall.userId && (
+                          {selectedInstall.userId && canEdit && (
                             <button
                               type="button"
                               onClick={() => {
@@ -1196,7 +1204,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
               >
                 Cancel
               </Button>
-              <Button type="submit">
+              <Button type="submit" disabled={!canEdit}>
                 {isNewCustomer ? "Schedule Installation and Add Customer" : "Add Installation"}
               </Button>
             </div>

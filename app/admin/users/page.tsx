@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useCanEdit } from "../can-edit-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -67,6 +68,7 @@ function parseDateForDisplay(iso: string): Date {
 
 export default function CustomersPage() {
   const router = useRouter();
+  const canEdit = useCanEdit();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -265,7 +267,7 @@ export default function CustomersPage() {
             Manage customer accounts and subscriptions
           </p>
         </div>
-        <Button type="button" onClick={openAddCustomer}>
+        <Button type="button" onClick={openAddCustomer} disabled={!canEdit}>
           <UserPlus className="h-4 w-4 mr-2" />
           Add Customer
         </Button>
@@ -365,7 +367,7 @@ export default function CustomersPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={addSaving}>
+              <Button type="submit" disabled={!canEdit || addSaving}>
                 {addSaving ? "Adding…" : "Add customer"}
               </Button>
             </div>
@@ -415,8 +417,9 @@ export default function CustomersPage() {
             </Button>
             <Button
               variant="destructive"
+              disabled={!canEdit || deleting}
               onClick={async () => {
-                if (!deleteTarget) return;
+                if (!deleteTarget || !canEdit) return;
                 setDeleting(true);
                 setDeleteError(null);
                 try {
@@ -431,7 +434,6 @@ export default function CustomersPage() {
                   setDeleting(false);
                 }
               }}
-              disabled={deleting}
             >
               {deleting ? "Deleting…" : "Delete"}
             </Button>
@@ -735,6 +737,7 @@ export default function CustomersPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            disabled={!canEdit}
                             onClick={(e) => {
                               e.stopPropagation();
                               e.preventDefault();
