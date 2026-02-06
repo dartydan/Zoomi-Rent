@@ -14,7 +14,7 @@ if (!apiKey) {
 }
 
 const from = process.env.RESEND_FROM_EMAIL ?? "Zoomi Rentals <noreply@rent.zoomi.co>";
-const to = process.env.RESEND_TO_EMAIL ?? "signup@rent.zoomi.co";
+const to = process.env.RESEND_TO_EMAIL ?? "business@zoomi.co";
 
 const resend = new Resend(apiKey);
 

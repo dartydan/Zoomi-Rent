@@ -27,7 +27,7 @@ export async function GET() {
       housingType: "rent",
       selectedPlan: "Basic",
     });
-    return NextResponse.json({ success: true, message: "Test email sent to signup@rent.zoomi.co" });
+    return NextResponse.json({ success: true, message: "Test email sent to business@zoomi.co" });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Test email error:", err);
