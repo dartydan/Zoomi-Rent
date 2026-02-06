@@ -69,6 +69,137 @@ export function getFinancesPeriodLabel(period: FinancesPeriod): string {
   return "Year to date";
 }
 
+/** Normalize a price's amount to monthly recurring (MRR). */
+function amountToMonthly(
+  amountCents: number,
+  interval: string,
+  intervalCount: number
+): number {
+  const amount = amountCents / 100;
+  if (intervalCount <= 0) return 0;
+  switch (interval) {
+    case "month":
+      return amount / intervalCount;
+    case "year":
+      return amount / (12 * intervalCount);
+    case "week":
+      return (amount * (52 / 12)) / intervalCount;
+    case "day":
+      return (amount * 30) / intervalCount;
+    default:
+      return amount; // fallback
+  }
+}
+
+/** Current MRR from all active and scheduled subscriptions. */
+export async function computeMRR(): Promise<number> {
+  const stripe = getStripe();
+  let mrr = 0;
+  if (!stripe) return mrr;
+
+  const subStatuses = ["active", "trialing", "past_due"] as const;
+  for (const status of subStatuses) {
+    let subHasMore = true;
+    let subStartingAfter: string | undefined;
+    while (subHasMore) {
+      const subList = await stripe.subscriptions.list({
+        status,
+        limit: 100,
+        expand: [
+          "data.items.data.price",
+          "data.discounts",
+          "data.discounts.coupon",
+        ],
+        ...(subStartingAfter && { starting_after: subStartingAfter }),
+      });
+      for (const sub of subList.data) {
+        let amt = 0;
+        for (const item of sub.items?.data ?? []) {
+          const price = item?.price;
+          const quantity = item?.quantity ?? 1;
+          if (price && typeof price === "object" && price.unit_amount != null) {
+            const interval = price.recurring?.interval ?? "month";
+            const intervalCount = price.recurring?.interval_count ?? 1;
+            amt += amountToMonthly(
+              price.unit_amount * quantity,
+              interval,
+              intervalCount
+            );
+          }
+        }
+        if (amt > 0) {
+          const discounts = sub.discounts ?? (sub.discount ? [sub.discount] : []);
+          for (const d of discounts) {
+            const coupon = typeof d === "object" && d && "coupon" in d ? d.coupon : null;
+            if (coupon && typeof coupon === "object") {
+              if (coupon.percent_off != null) {
+                amt = (amt * (100 - coupon.percent_off)) / 100;
+              } else if (coupon.amount_off != null) {
+                amt = Math.max(0, amt - coupon.amount_off / 100);
+              }
+            }
+          }
+          mrr += amt;
+        }
+      }
+      subHasMore = subList.has_more;
+      if (subList.data.length > 0) {
+        subStartingAfter = subList.data[subList.data.length - 1].id;
+      } else {
+        subHasMore = false;
+      }
+    }
+  }
+
+  let schedHasMore = true;
+  let schedStartingAfter: string | undefined;
+  while (schedHasMore) {
+    const schedList = await stripe.subscriptionSchedules.list({
+      limit: 100,
+      expand: ["data.phases.items.price"],
+      ...(schedStartingAfter && { starting_after: schedStartingAfter }),
+    });
+    for (const sched of schedList.data) {
+      if (sched.status !== "not_started") continue;
+      const phase = sched.phases?.[0];
+      if (!phase) continue;
+      for (const pi of phase.items ?? []) {
+        try {
+          const price =
+            typeof pi.price === "string"
+              ? await stripe.prices.retrieve(pi.price)
+              : pi.price;
+          if (
+            price &&
+            typeof price === "object" &&
+            !("deleted" in price) &&
+            "unit_amount" in price &&
+            price.unit_amount != null
+          ) {
+            const interval = price.recurring?.interval ?? "month";
+            const intervalCount = price.recurring?.interval_count ?? 1;
+            mrr += amountToMonthly(
+              price.unit_amount * (pi.quantity ?? 1),
+              interval,
+              intervalCount
+            );
+          }
+        } catch {
+          // skip
+        }
+      }
+    }
+    schedHasMore = schedList.has_more;
+    if (schedList.data.length > 0) {
+      schedStartingAfter = schedList.data[schedList.data.length - 1].id;
+    } else {
+      schedHasMore = false;
+    }
+  }
+
+  return mrr;
+}
+
 /** Sum of received revenue (charge, payment) in the given date range. */
 export async function computeRevenueForDateRange(
   startTs: number,

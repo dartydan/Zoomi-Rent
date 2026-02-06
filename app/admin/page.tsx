@@ -5,5 +5,6 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const revenue = await computeAdminRevenue();
-  return <AdminPageClient revenue={revenue} />;
+  const serialized = JSON.parse(JSON.stringify(revenue)) as typeof revenue;
+  return <AdminPageClient revenue={serialized} />;
 }

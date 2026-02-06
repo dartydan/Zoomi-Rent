@@ -48,8 +48,18 @@ type Customer = {
   lastName: string | null;
 };
 
-export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRevenueData }) {
   const canEdit = useCanEdit();
+  const [revenue, setRevenue] = useState<AdminRevenueData>(initialRevenue);
   const [installs, setInstalls] = useState<Install[]>([]);
   const [installsLoading, setInstallsLoading] = useState(true);
   const [selectedInstall, setSelectedInstall] = useState<Install | null>(null);
@@ -87,6 +97,21 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
       setEditingInstallTime(false);
     }
   }, [selectedInstall]);
+
+  // Fetch revenue on mount and periodically
+  useEffect(() => {
+    function fetchRevenue() {
+      fetch("/api/admin/revenue", { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: AdminRevenueData | null) => {
+          if (data) setRevenue(data);
+        })
+        .catch(() => {});
+    }
+    fetchRevenue();
+    const interval = setInterval(fetchRevenue, 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch transactions when dialog opens
   useEffect(() => {
@@ -305,34 +330,34 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
           <CardDescription>Inventory status and fleet utilization</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 min-w-0">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 Rented
               </p>
-              <p className="text-3xl font-bold text-foreground tabular-nums">
+              <p className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums">
                 {unitsRented}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 {totalInventory > 0 ? `${((unitsRented / totalInventory) * 100).toFixed(0)}% utilization` : "—"}
               </p>
             </div>
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 min-w-0">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 Available
               </p>
-              <p className="text-3xl font-bold text-foreground tabular-nums">
+              <p className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums">
                 {unitsAvailable}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 Ready for rental
               </p>
             </div>
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 min-w-0">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 All
               </p>
-              <p className="text-3xl font-bold text-foreground tabular-nums">
+              <p className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums">
                 {totalInventory}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
@@ -350,8 +375,8 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
           <CardDescription>Track income and forecasted growth • Click amounts to view transactions</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 min-w-0 overflow-hidden">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 {revenue.lastMonthName}
               </p>
@@ -360,15 +385,12 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 onClick={() =>
                   setTransactionsDialog({ month: "last", monthName: revenue.lastMonthName })
                 }
-                className="text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
+                className="block w-full text-left text-2xl sm:text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
               >
-                ${revenue.lastMonthRevenue.toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {formatCurrency(revenue.lastMonthRevenue)}
               </button>
             </div>
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 min-w-0 overflow-hidden">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 {revenue.thisMonthName}
               </p>
@@ -377,15 +399,12 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 onClick={() =>
                   setTransactionsDialog({ month: "this", monthName: revenue.thisMonthName })
                 }
-                className="text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
+                className="block w-full text-left text-2xl sm:text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
               >
-                ${revenue.thisMonthRevenue.toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {formatCurrency(revenue.thisMonthRevenue)}
               </button>
             </div>
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 min-w-0 overflow-hidden">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 {revenue.nextMonthName}
               </p>
@@ -394,12 +413,9 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 onClick={() =>
                   setTransactionsDialog({ month: "next", monthName: revenue.nextMonthName })
                 }
-                className="text-3xl font-bold text-green-600 dark:text-green-500 hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
+                className="block w-full text-left text-2xl sm:text-3xl font-bold text-green-600 dark:text-green-500 hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
               >
-                ${revenue.nextMonthForecast.toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+                {formatCurrency(revenue.nextMonthForecast)}
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  computeMRR,
   computeRevenueForDateRange,
   computeRevenueTransactionsForDateRange,
   getFinancesPeriodBounds,
@@ -41,8 +42,9 @@ export default async function FinancesPage({
 
   const bounds = getFinancesPeriodBounds(period);
   const { startDate, endDate } = getFinancesPeriodDateStrings(period);
-  const [moneyIn, units, manualExpenses, incomingTransactions] = await Promise.all([
+  const [moneyIn, mrr, units, manualExpenses, incomingTransactions] = await Promise.all([
     computeRevenueForDateRange(bounds.start, bounds.end),
+    computeMRR(),
     readUnits(),
     readManualExpenses(),
     computeRevenueTransactionsForDateRange(bounds.start, bounds.end),
@@ -50,6 +52,9 @@ export default async function FinancesPage({
   const moneyOut = computeMoneyOutForPeriod(units, manualExpenses, startDate, endDate);
   const expenseTransactions = getExpenseTransactions(units, manualExpenses, startDate, endDate);
   const net = moneyIn - moneyOut;
+
+  const serializedIncoming = JSON.parse(JSON.stringify(incomingTransactions));
+  const serializedExpenses = JSON.parse(JSON.stringify(expenseTransactions));
 
   return (
     <div className="space-y-6">
@@ -69,7 +74,20 @@ export default async function FinancesPage({
 
       <section>
         <h2 className="sr-only">Summary</h2>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                MRR
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">{formatCurrency(mrr)}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Active + scheduled subscriptions
+              </p>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -119,7 +137,7 @@ export default async function FinancesPage({
             <CardTitle>Incoming Transactions</CardTitle>
           </CardHeader>
           <CardContent>
-            <IncomingTransactionsTable transactions={incomingTransactions} />
+            <IncomingTransactionsTable transactions={serializedIncoming} />
           </CardContent>
         </Card>
         <Card>
@@ -128,7 +146,7 @@ export default async function FinancesPage({
             <AddExpenseButton />
           </CardHeader>
           <CardContent>
-            <ExpensesTable transactions={expenseTransactions} />
+            <ExpensesTable transactions={serializedExpenses} />
           </CardContent>
         </Card>
       </section>
