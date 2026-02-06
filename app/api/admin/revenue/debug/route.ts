@@ -10,8 +10,11 @@ function getStripe(): Stripe | null {
   return new Stripe(key);
 }
 
-/** Debug endpoint to inspect why subscriptions might not show in revenue. */
+/** Debug endpoint to inspect why subscriptions might not show in revenue. Disabled in production. */
 export async function GET() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   try {
     await requireAdmin();
   } catch {

@@ -915,7 +915,6 @@ export default function UnitDetailsPage() {
                   setDeleteLoading(false);
                 }
               }}
-              disabled={deleteLoading}
             >
               {deleteLoading ? "Deleting…" : "Delete"}
             </Button>

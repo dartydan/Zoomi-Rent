@@ -32,7 +32,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ### 4. Deploy to Vercel
 
 1. Push to GitHub and connect the repo in Vercel.
-2. Add environment variables in Vercel project settings.
+2. Add environment variables in Vercel project settings (see [docs/PRODUCTION.md](docs/PRODUCTION.md)).
 3. Deploy.
 
 **Production sign-in:** If users see "Use another method" / "Facing issues?" on the live site, configure Clerk for production: add your domain and redirect URLs in the Clerk Dashboard. See [docs/CLERK_PRODUCTION.md](docs/CLERK_PRODUCTION.md).
