@@ -55,7 +55,7 @@ export function PricingCalculator() {
     <div className="space-y-4 sm:space-y-6">
       {/* AutoPay toggle */}
       <div className="flex justify-center">
-        <div className="inline-flex flex-row items-center gap-4 rounded-2xl sm:border-2 sm:border-border sm:bg-card px-6 py-5 sm:shadow-sm">
+        <div className="inline-flex flex-row items-center gap-4 px-6 py-5">
           <div className="flex items-center gap-3">
             <Zap className="h-5 w-5 text-primary" />
             <div className="text-left">
