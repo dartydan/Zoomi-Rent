@@ -126,6 +126,15 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    const minDate = new Date();
+    minDate.setDate(minDate.getDate() + 6);
+    const minStr = `${minDate.getFullYear()}-${String(minDate.getMonth() + 1).padStart(2, "0")}-${String(minDate.getDate()).padStart(2, "0")}`;
+    if (unitsOutBy < minStr) {
+      return NextResponse.json(
+        { error: "Please select a date at least 6 days from today" },
+        { status: 400 }
+      );
+    }
     const notes = typeof body.notes === "string" ? sanitize(body.notes) : "";
 
     if (resend) {

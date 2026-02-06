@@ -142,6 +142,13 @@ export default function HelpPage() {
         setRequestError("Please enter when the units need to be removed by");
         return;
       }
+      const minDate = new Date();
+      minDate.setDate(minDate.getDate() + 6);
+      const minStr = `${minDate.getFullYear()}-${String(minDate.getMonth() + 1).padStart(2, "0")}-${String(minDate.getDate()).padStart(2, "0")}`;
+      if (unitsOutBy.trim() < minStr) {
+        setRequestError("Please select a date at least 6 days from today");
+        return;
+      }
     }
     if (requestType === "return-property") {
       if (!propertyLocation.trim()) {
@@ -528,6 +535,11 @@ export default function HelpPage() {
                       id="units-out-by"
                       type="date"
                       className="w-full min-w-0 max-w-full box-border"
+                      min={(() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 6);
+                        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                      })()}
                       value={unitsOutBy}
                       onChange={(e) => setUnitsOutBy(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleRequestSubmit()}
