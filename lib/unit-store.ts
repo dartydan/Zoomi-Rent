@@ -100,3 +100,12 @@ export async function updateUnit(u: Unit): Promise<void> {
   units[idx] = { ...u, updatedAt: new Date().toISOString() };
   await writeUnitsToStore(units);
 }
+
+export async function deleteUnit(id: string): Promise<void> {
+  const units = await readUnitsFromStore();
+  const filtered = units.filter((x) => x.id !== id);
+  if (filtered.length === units.length) {
+    throw new Error(`Unit ${id} not found`);
+  }
+  await writeUnitsToStore(filtered);
+}

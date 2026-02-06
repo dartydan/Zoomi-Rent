@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
-import { getUnitById, updateUnit } from "@/lib/unit-store";
+import { getUnitById, updateUnit, deleteUnit } from "@/lib/unit-store";
 import { computeRevenueForAssignedUser } from "@/lib/property-revenue";
 import type { Unit } from "@/lib/unit";
 
@@ -80,6 +80,33 @@ export async function PATCH(
     console.error("Admin unit update error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to update unit" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireAdmin();
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const { id } = await params;
+    const unit = await getUnitById(id);
+    if (!unit) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    await deleteUnit(id);
+    return new NextResponse(null, { status: 204 });
+  } catch (err) {
+    console.error("Admin unit delete error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to delete unit" },
       { status: 500 }
     );
   }

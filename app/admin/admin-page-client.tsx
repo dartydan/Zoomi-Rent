@@ -296,73 +296,50 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
         </div>
       </div>
 
-      {/* Inventory Stats */}
-      <div className="grid grid-cols-3 gap-6">
-        <div className="flex flex-col items-center gap-2 md:gap-0 md:block">
-          <Card className="w-full flex flex-col items-center justify-center py-4 md:py-0 md:block text-center md:text-left">
-            <div className="hidden md:block">
-              <CardHeader className="space-y-1">
-                <CardTitle className="text-base font-medium">Rented</CardTitle>
-                <CardDescription className="text-3xl font-bold text-foreground">
-                  {unitsRented}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  {totalInventory > 0 ? `${((unitsRented / totalInventory) * 100).toFixed(0)}% utilization` : "—"}
-                </p>
-              </CardContent>
+      {/* Units Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Units Overview</CardTitle>
+          <CardDescription>Inventory status and fleet utilization</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                Rented
+              </p>
+              <p className="text-3xl font-bold text-foreground tabular-nums">
+                {unitsRented}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {totalInventory > 0 ? `${((unitsRented / totalInventory) * 100).toFixed(0)}% utilization` : "—"}
+              </p>
             </div>
-            <div className="flex flex-col items-center gap-1 p-4 md:hidden">
-              <p className="text-sm font-medium text-muted-foreground">Rented</p>
-              <p className="text-3xl font-bold text-foreground">{unitsRented}</p>
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                Available
+              </p>
+              <p className="text-3xl font-bold text-foreground tabular-nums">
+                {unitsAvailable}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Ready for rental
+              </p>
             </div>
-          </Card>
-          <p className="text-sm text-muted-foreground md:hidden">
-            {totalInventory > 0 ? `${((unitsRented / totalInventory) * 100).toFixed(0)}% utilization` : "—"}
-          </p>
-        </div>
-        <div className="flex flex-col items-center gap-2 md:gap-0 md:block">
-          <Card className="w-full flex flex-col items-center justify-center py-4 md:py-0 md:block text-center md:text-left">
-            <div className="hidden md:block">
-              <CardHeader className="space-y-1">
-                <CardTitle className="text-base font-medium">Available</CardTitle>
-                <CardDescription className="text-3xl font-bold text-foreground">
-                  {unitsAvailable}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Ready for rental</p>
-              </CardContent>
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                All
+              </p>
+              <p className="text-3xl font-bold text-foreground tabular-nums">
+                {totalInventory}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Units in fleet
+              </p>
             </div>
-            <div className="flex flex-col items-center gap-1 p-4 md:hidden">
-              <p className="text-sm font-medium text-muted-foreground">Available</p>
-              <p className="text-3xl font-bold text-foreground">{unitsAvailable}</p>
-            </div>
-          </Card>
-          <p className="text-sm text-muted-foreground md:hidden">Ready for rental</p>
-        </div>
-        <div className="flex flex-col items-center gap-2 md:gap-0 md:block">
-          <Card className="w-full flex flex-col items-center justify-center py-4 md:py-0 md:block text-center md:text-left">
-            <div className="hidden md:block">
-              <CardHeader className="space-y-1">
-                <CardTitle className="text-base font-medium">All</CardTitle>
-                <CardDescription className="text-3xl font-bold text-foreground">
-                  {totalInventory}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Units in fleet</p>
-              </CardContent>
-            </div>
-            <div className="flex flex-col items-center gap-1 p-4 md:hidden">
-              <p className="text-sm font-medium text-muted-foreground">All</p>
-              <p className="text-3xl font-bold text-foreground">{totalInventory}</p>
-            </div>
-          </Card>
-          <p className="text-sm text-muted-foreground md:hidden">Units in fleet</p>
-        </div>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Revenue Section */}
       <Card>
@@ -371,9 +348,9 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
           <CardDescription>Track income and forecasted growth • Click amounts to view transactions</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-6">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-2">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 {revenue.lastMonthName}
               </p>
               <button
@@ -381,7 +358,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 onClick={() =>
                   setTransactionsDialog({ month: "last", monthName: revenue.lastMonthName })
                 }
-                className="text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+                className="text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
               >
                 ${revenue.lastMonthRevenue.toLocaleString("en-US", {
                   minimumFractionDigits: 2,
@@ -389,8 +366,8 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 })}
               </button>
             </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-2">
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 {revenue.thisMonthName}
               </p>
               <button
@@ -398,7 +375,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 onClick={() =>
                   setTransactionsDialog({ month: "this", monthName: revenue.thisMonthName })
                 }
-                className="text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+                className="text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
               >
                 ${revenue.thisMonthRevenue.toLocaleString("en-US", {
                   minimumFractionDigits: 2,
@@ -406,8 +383,8 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 })}
               </button>
             </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground mb-2">
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                 {revenue.nextMonthName}
               </p>
               <button
@@ -415,7 +392,7 @@ export function AdminPageClient({ revenue }: { revenue: AdminRevenueData }) {
                 onClick={() =>
                   setTransactionsDialog({ month: "next", monthName: revenue.nextMonthName })
                 }
-                className="text-3xl font-bold text-green-600 dark:text-green-500 hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+                className="text-3xl font-bold text-green-600 dark:text-green-500 hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
               >
                 ${revenue.nextMonthForecast.toLocaleString("en-US", {
                   minimumFractionDigits: 2,

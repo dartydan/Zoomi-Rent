@@ -23,7 +23,7 @@ import {
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { Label } from "@/components/ui/label";
-import { Plus, X, Wrench, PackageX, CreditCard, CalendarClock, Package, DollarSign, Home, User, Copy, Check, FileText } from "lucide-react";
+import { Plus, X, Wrench, PackageX, CreditCard, CalendarClock, Package, DollarSign, Home, User, Copy, Check, FileText, Trash2 } from "lucide-react";
 import type { Unit, MachineInfo, MachineStatus, AdditionalCostEntry, NoteEntry } from "@/lib/unit";
 
 type EditableField = "washer" | "dryer" | "unit";
@@ -115,6 +115,8 @@ export default function UnitDetailsPage() {
   };
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [sendToWarehouseLoading, setSendToWarehouseLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedAt, setCopiedAt] = useState<{ x: number; y: number } | null>(null);
   const [addNoteOpen, setAddNoteOpen] = useState(false);
@@ -353,7 +355,7 @@ export default function UnitDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="relative flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/admin/property" className="text-primary w-fit">
@@ -408,7 +410,18 @@ export default function UnitDetailsPage() {
             </DropdownMenuContent>
           </DropdownMenu>
             <div className="relative flex items-center gap-2">
-              <span className="font-mono text-sm text-muted-foreground">{unit.id}</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copyUnitUrl(e);
+                }}
+                className="font-mono text-sm text-muted-foreground bg-transparent border-0 p-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+                aria-label="Copy unit URL"
+                title="Copy unit URL"
+              >
+                {unit.id}
+              </button>
               <button
                 type="button"
                 onClick={(e) => {
@@ -473,6 +486,14 @@ export default function UnitDetailsPage() {
               {sendToWarehouseLoading ? "Sending…" : "Send to warehouse"}
             </Button>
           )}
+          <button
+            type="button"
+            className="absolute top-0 right-0 sm:static text-destructive p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+            onClick={() => setDeleteDialogOpen(true)}
+            aria-label="Delete unit"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
@@ -842,6 +863,49 @@ export default function UnitDetailsPage() {
           </Card>
         </aside>
       </div>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => !deleteLoading && setDeleteDialogOpen(open)}>
+        <DialogContent className="max-w-md" onPointerDownOutside={(e) => deleteLoading && e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Delete unit</DialogTitle>
+            <DialogDescription>
+              This will permanently delete unit{" "}
+              <span className="font-mono text-foreground">{unit.id}</span>
+              {unit.assignedUserId ? (
+                <> and unassign it from the customer. </>
+              ) : null}
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleteLoading}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                setDeleteLoading(true);
+                setError(null);
+                try {
+                  const res = await fetch(`/api/admin/units/${unit.id}`, { method: "DELETE" });
+                  if (!res.ok) {
+                    const json = await res.json().catch(() => ({}));
+                    throw new Error((json as { error?: string }).error ?? "Failed to delete");
+                  }
+                  router.push("/admin/property");
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Failed to delete");
+                } finally {
+                  setDeleteLoading(false);
+                }
+              }}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

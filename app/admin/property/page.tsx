@@ -18,7 +18,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, TrendingUp, User, Home, ChevronRight } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Plus, User, Home, ChevronRight, MoreVertical, Trash2 } from "lucide-react";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import type { Unit, MachineStatus } from "@/lib/unit";
 
@@ -81,6 +89,9 @@ export default function PropertyPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Unit | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const userById = (id: string) => users.find((u) => u.id === id);
 
@@ -325,7 +336,29 @@ export default function PropertyPage() {
                             {formatCurrency(roi(u))}
                           </span>
                         </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
+                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label={`Actions for unit ${u.id}`}
+                                className="p-1 rounded hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setDeleteTarget(u)}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete unit
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                        </div>
                       </div>
                     );
                   })
@@ -333,22 +366,20 @@ export default function PropertyPage() {
               </div>
 
               {/* Desktop: full table */}
-              <Table className="table-fixed hidden md:table">
+              <Table className="hidden md:table w-full table-auto">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="pl-6 w-10" aria-label="Status" />
-                  <TableHead className="w-[180px]">ID</TableHead>
-                  <TableHead className="w-[200px]">Location</TableHead>
-                  <TableHead>Washer</TableHead>
-                  <TableHead>Dryer</TableHead>
-                  <TableHead className="text-right">Total cost</TableHead>
-                  <TableHead className="text-right">Revenue</TableHead>
+                  <TableHead className="w-10 pl-6 pr-4 py-4" aria-label="Status" />
+                  <TableHead className="min-w-[140px] py-4">ID</TableHead>
+                  <TableHead className="min-w-[160px] w-auto py-4">Location</TableHead>
+                  <TableHead className="text-right min-w-[100px] py-4">ROI</TableHead>
+                  <TableHead className="w-10 pr-6" aria-label="Actions" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {units.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8 pl-6 pr-6">
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8 pl-6 pr-6">
                       No units yet. Add one to get started.
                     </TableCell>
                   </TableRow>
@@ -369,7 +400,7 @@ export default function PropertyPage() {
                           }
                         }}
                       >
-                        <TableCell className="pl-6" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="w-10 pl-6 pr-4 py-4" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
@@ -417,10 +448,10 @@ export default function PropertyPage() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">
+                        <TableCell className="font-mono text-xs text-muted-foreground min-w-[140px] py-4">
                           {u.id}
                         </TableCell>
-                        <TableCell className="text-sm w-[200px] max-w-[200px] overflow-hidden">
+                        <TableCell className="text-sm min-w-[160px] py-4">
                           <span className="flex min-w-0 items-center gap-2 truncate" title={u.assignedUserId ? userDisplay(userById(u.assignedUserId) ?? { id: u.assignedUserId, email: null, firstName: null, lastName: null }) : "Warehouse"}>
                             {u.assignedUserId ? (
                               <User className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -432,24 +463,30 @@ export default function PropertyPage() {
                             </span>
                           </span>
                         </TableCell>
-                        <TableCell className="text-sm max-w-[160px]">
-                          <span className="truncate block" title={[u.washer.brand, u.washer.model].filter(Boolean).join(" ") || "—"}>
-                            {[u.washer.brand, u.washer.model].filter(Boolean).join(" ") || "—"}
-                          </span>
+                        <TableCell className="text-right tabular-nums min-w-[100px] py-4">
+                          {formatCurrency(roi(u))}
                         </TableCell>
-                        <TableCell className="text-sm max-w-[160px]">
-                          <span className="truncate block" title={[u.dryer.brand, u.dryer.model].filter(Boolean).join(" ") || "—"}>
-                            {[u.dryer.brand, u.dryer.model].filter(Boolean).join(" ") || "—"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(totalCost(u))}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="flex items-center justify-end gap-1">
-                            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                            {formatCurrency(totalRevenue(u))}
-                          </span>
+                        <TableCell className="w-10 pr-6 py-4" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label={`Actions for unit ${u.id}`}
+                                className="p-1 rounded hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setDeleteTarget(u)}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete unit
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     );
@@ -462,6 +499,74 @@ export default function PropertyPage() {
         </CardContent>
       </Card>
 
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!deleting) {
+            if (!open) setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md" onPointerDownOutside={(e) => deleting && e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Delete unit</DialogTitle>
+            <DialogDescription>
+              {deleteTarget && (
+                <>
+                  This will permanently delete unit{" "}
+                  <span className="font-mono text-foreground">{deleteTarget.id}</span>
+                  {deleteTarget.assignedUserId ? (
+                    <> and unassign it from the customer. </>
+                  ) : null}
+                  This action cannot be undone.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p className="text-sm text-destructive" role="alert">
+              {deleteError}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!deleteTarget) return;
+                setDeleting(true);
+                setDeleteError(null);
+                try {
+                  const res = await fetch(`/api/admin/units/${deleteTarget.id}`, { method: "DELETE" });
+                  if (!res.ok) {
+                    const json = await res.json().catch(() => ({}));
+                    throw new Error((json as { error?: string }).error ?? "Failed to delete");
+                  }
+                  setUnits((prev) => prev.filter((u) => u.id !== deleteTarget.id));
+                  setDeleteTarget(null);
+                } catch (err) {
+                  setDeleteError(err instanceof Error ? err.message : "Failed to delete");
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
