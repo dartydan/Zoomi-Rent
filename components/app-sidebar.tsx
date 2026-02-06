@@ -22,8 +22,6 @@ import {
 import { isStaffRole } from "@/lib/staff-role";
 
 const CUSTOMER_PORTAL_VIEW_COOKIE = "customer_portal_view";
-const END_SERVICES_MAILTO =
-  "mailto:help@zoomi.co?subject=End%20Rental%20Request&body=I%20would%20like%20to%20end%20my%20washer%2Fdryer%20rental.";
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -193,10 +191,10 @@ export function AppSidebar() {
               {isSignedIn && (
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild className="gap-2 text-muted-foreground hover:text-destructive">
-                    <a href={END_SERVICES_MAILTO}>
+                    <Link href="/help?action=end-service">
                       <XCircle className="h-4 w-4" />
                       <span>End Services</span>
-                    </a>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
