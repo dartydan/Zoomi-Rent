@@ -82,7 +82,7 @@ export function getExpenseTransactions(
       }
     }
   }
-  items.sort((a, b) => a.date.localeCompare(b.date));
+  items.sort((a, b) => b.date.localeCompare(a.date));
   return items;
 }
 
