@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       type: "maintenance" | "end-service" | "return-property";
       description?: string;
       notes?: string;
+      unitsOutBy?: string;
       propertyLocation?: string;
       contactInfo?: string;
     };
@@ -118,6 +119,13 @@ export async function POST(req: NextRequest) {
     }
 
     // end-service
+    const unitsOutBy = typeof body.unitsOutBy === "string" ? sanitize(body.unitsOutBy) : "";
+    if (!unitsOutBy) {
+      return NextResponse.json(
+        { error: "Please enter when the units need to be removed by" },
+        { status: 400 }
+      );
+    }
     const notes = typeof body.notes === "string" ? sanitize(body.notes) : "";
 
     if (resend) {
@@ -127,6 +135,7 @@ export async function POST(req: NextRequest) {
         `Customer: ${userName}`,
         `Email: ${userEmail}`,
         `Customer profile: ${profileUrl}`,
+        `Units need to be removed by: ${unitsOutBy}`,
         notes ? `---\nAdditional details: ${notes}` : null,
       ]
         .filter(Boolean)

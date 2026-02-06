@@ -40,6 +40,7 @@ export default function HelpPage() {
   const [requestType, setRequestType] = useState<RequestType | null>(null);
   const [requestDescription, setRequestDescription] = useState("");
   const [requestNotes, setRequestNotes] = useState("");
+  const [unitsOutBy, setUnitsOutBy] = useState("");
   const [propertyLocation, setPropertyLocation] = useState("");
   const [contactInfo, setContactInfo] = useState("");
   const [requestLoading, setRequestLoading] = useState(false);
@@ -87,6 +88,7 @@ export default function HelpPage() {
       setRequestType(action);
       setRequestDescription("");
       setRequestNotes("");
+      setUnitsOutBy("");
       setPropertyLocation("");
       setContactInfo("");
       setRequestError(null);
@@ -107,6 +109,7 @@ export default function HelpPage() {
     setRequestType(type);
     setRequestDescription("");
     setRequestNotes("");
+    setUnitsOutBy("");
     setPropertyLocation("");
     setContactInfo("");
     setRequestError(null);
@@ -119,6 +122,7 @@ export default function HelpPage() {
     setRequestType(null);
     setRequestDescription("");
     setRequestNotes("");
+    setUnitsOutBy("");
     setPropertyLocation("");
     setContactInfo("");
     setRequestError(null);
@@ -130,6 +134,12 @@ export default function HelpPage() {
     if (requestType === "maintenance") {
       if (!requestDescription.trim()) {
         setRequestError("Please describe the maintenance issue");
+        return;
+      }
+    }
+    if (requestType === "end-service") {
+      if (!unitsOutBy.trim()) {
+        setRequestError("Please enter when the units need to be removed by");
         return;
       }
     }
@@ -153,6 +163,7 @@ export default function HelpPage() {
           type: requestType,
           description: requestType === "maintenance" ? requestDescription.trim() : undefined,
           notes: requestType === "end-service" ? requestNotes.trim() || undefined : undefined,
+          unitsOutBy: requestType === "end-service" ? unitsOutBy.trim() : undefined,
           propertyLocation: requestType === "return-property" ? propertyLocation.trim() : undefined,
           contactInfo: requestType === "return-property" ? contactInfo.trim() : undefined,
         }),
@@ -334,8 +345,7 @@ export default function HelpPage() {
               <DialogHeader>
                 <DialogTitle>Where are you moving?</DialogTitle>
                 <DialogDescription>
-                  Enter the ZIP code of your new address. If you&apos;re within about an hour of
-                  Muncie (47304), your washer and dryer can move with you.
+                  Enter the ZIP code of your new address.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -373,9 +383,7 @@ export default function HelpPage() {
               <DialogHeader>
                 <DialogTitle>Move out date</DialogTitle>
                 <DialogDescription>
-                  {choseReturnDespiteInRange
-                    ? "We'll coordinate the return of your washer and dryer. When is your move out date?"
-                    : "Your new address is outside our service area. We'll coordinate the return of your washer and dryer. When is your move out date?"}
+                  We&apos;ll coordinate the return of your washer and dryer. When is your move out date?
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -454,7 +462,10 @@ export default function HelpPage() {
       </Dialog>
 
       <Dialog open={requestDialogOpen} onOpenChange={(open) => !open && closeRequestDialog()}>
-        <DialogContent className="max-w-md">
+        <DialogContent
+          className="max-w-[min(28rem,calc(100vw-2rem))] min-w-0 overflow-hidden"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           {requestSuccess ? (
             <>
               <DialogHeader>
@@ -509,7 +520,20 @@ export default function HelpPage() {
                   team will reach out to coordinate the pickup of our machines.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4">
+              <div className="min-w-0 overflow-hidden space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="units-out-by">When do the units need to be removed by?</Label>
+                  <div className="w-full min-w-0 overflow-hidden">
+                    <Input
+                      id="units-out-by"
+                      type="date"
+                      className="w-full min-w-0 max-w-full box-border"
+                      value={unitsOutBy}
+                      onChange={(e) => setUnitsOutBy(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleRequestSubmit()}
+                    />
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="request-notes">Additional details (optional)</Label>
                   <textarea
