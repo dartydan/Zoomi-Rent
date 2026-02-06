@@ -22,20 +22,30 @@ function getStripe(): Stripe {
 export async function computeRevenueForAssignedUser(userId: string): Promise<number> {
   try {
     const user = await clerkClient.users.getUser(userId);
-    const stripeCustomerId = user.publicMetadata?.stripeCustomerId as string | undefined;
+    let stripeCustomerId = (user.publicMetadata?.stripeCustomerId as string | undefined)?.trim() || null;
     const install = (user.publicMetadata?.[INSTALL_METADATA_KEY] ?? {}) as InstallInfo;
     const installDateStr =
       Array.isArray(install.installs) && install.installs.length > 0
         ? install.installs[0].installDate
         : install.installDate;
 
-    if (!stripeCustomerId || !installDateStr) return 0;
+    if (!installDateStr) return 0;
+
+    const stripe = getStripe();
+    if (!stripeCustomerId) {
+      const email = user.emailAddresses?.[0]?.emailAddress;
+      if (email) {
+        const list = await stripe.customers.list({ email, limit: 1 });
+        if (list.data.length > 0 && !list.data[0].deleted) {
+          stripeCustomerId = list.data[0].id;
+        }
+      }
+    }
+    if (!stripeCustomerId) return 0;
 
     const installStart = new Date(installDateStr);
     installStart.setUTCHours(0, 0, 0, 0);
     const installStartTs = Math.floor(installStart.getTime() / 1000);
-
-    const stripe = getStripe();
 
     // Install end: if any subscription is active → now; else use latest cancelled subscription's current_period_end
     const subscriptions = await stripe.subscriptions.list({
