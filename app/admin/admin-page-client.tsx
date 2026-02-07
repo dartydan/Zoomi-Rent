@@ -3,21 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useCanEdit } from "./can-edit-context";
-import type { AdminRevenueData, RevenueTransaction } from "@/lib/admin-revenue";
+import type { AdminRevenueData } from "@/lib/admin-revenue";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, User, Mail, Clock, Package, CheckCircle, Repeat, FileText, ExternalLink, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, User, Mail, Clock, Package, CheckCircle, ExternalLink, Pencil } from "lucide-react";
 import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { estDateTimeToISO } from "@/lib/utils";
 import { TimeSelect, timeToNearestOption } from "@/components/TimeSelect";
@@ -74,12 +66,6 @@ export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRev
   const [selectedUnits, setSelectedUnits] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("pending");
 
-  const [transactionsDialog, setTransactionsDialog] = useState<{
-    month: "last" | "this" | "next";
-    monthName: string;
-  } | null>(null);
-  const [transactions, setTransactions] = useState<RevenueTransaction[]>([]);
-  const [transactionsLoading, setTransactionsLoading] = useState(false);
 
   const [editingInstallDate, setEditingInstallDate] = useState(false);
   const [editingInstallTime, setEditingInstallTime] = useState(false);
@@ -103,7 +89,13 @@ export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRev
     function fetchRevenue() {
       fetch("/api/admin/revenue", { cache: "no-store" })
         .then((res) => (res.ok ? res.json() : null))
-        .then((data: AdminRevenueData | null) => {
+        .then(
+          (
+            data: (AdminRevenueData & {
+              mrr?: number;
+              revenuePast12Months?: number;
+            }) | null
+          ) => {
           if (data) setRevenue(data);
         })
         .catch(() => {});
@@ -112,19 +104,6 @@ export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRev
     const interval = setInterval(fetchRevenue, 60_000);
     return () => clearInterval(interval);
   }, []);
-
-  // Fetch transactions when dialog opens
-  useEffect(() => {
-    if (!transactionsDialog) return;
-    setTransactionsLoading(true);
-    fetch(`/api/admin/revenue/transactions?month=${transactionsDialog.month}`)
-      .then((res) => (res.ok ? res.json() : { transactions: [] }))
-      .then((data: { transactions?: RevenueTransaction[] }) => {
-        setTransactions(data.transactions ?? []);
-      })
-      .catch(() => setTransactions([]))
-      .finally(() => setTransactionsLoading(false));
-  }, [transactionsDialog]);
 
   // Fetch installs (from users with installDate) and units (for assigned unit IDs)
   useEffect(() => {
@@ -368,134 +347,46 @@ export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRev
         </CardContent>
       </Card>
 
-      {/* Revenue Section */}
+      {/* MRR & Revenue Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Revenue Overview</CardTitle>
-          <CardDescription>Track income and forecasted growth • Click amounts to view transactions</CardDescription>
+          <CardTitle className="text-base">Finances Overview</CardTitle>
+          <CardDescription>MRR and past 12 months gross revenue</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 min-w-0 overflow-hidden">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                {revenue.lastMonthName}
+                MRR
               </p>
-              <button
-                type="button"
-                onClick={() =>
-                  setTransactionsDialog({ month: "last", monthName: revenue.lastMonthName })
-                }
-                className="block w-full text-left text-2xl sm:text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
-              >
-                {formatCurrency(revenue.lastMonthRevenue)}
-              </button>
+              <p className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums">
+                {formatCurrency((revenue as { mrr?: number }).mrr ?? 0)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Active + scheduled subscriptions
+              </p>
             </div>
             <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 min-w-0 overflow-hidden">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                {revenue.thisMonthName}
+                Past 12 months
               </p>
-              <button
-                type="button"
-                onClick={() =>
-                  setTransactionsDialog({ month: "this", monthName: revenue.thisMonthName })
-                }
-                className="block w-full text-left text-2xl sm:text-3xl font-bold text-foreground hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
-              >
-                {formatCurrency(revenue.thisMonthRevenue)}
-              </button>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 min-w-0 overflow-hidden">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                {revenue.nextMonthName}
+              <p className="text-2xl sm:text-3xl font-bold text-foreground tabular-nums">
+                {formatCurrency(
+                  (revenue as { revenuePast12Months?: number }).revenuePast12Months ?? 0
+                )}
               </p>
-              <button
-                type="button"
-                onClick={() =>
-                  setTransactionsDialog({ month: "next", monthName: revenue.nextMonthName })
-                }
-                className="block w-full text-left text-2xl sm:text-3xl font-bold text-green-600 dark:text-green-500 hover:opacity-80 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded tabular-nums"
-              >
-                {formatCurrency(revenue.nextMonthForecast)}
-              </button>
+              <p className="text-xs text-muted-foreground mt-1">
+                Total gross revenue
+              </p>
             </div>
           </div>
+          <p className="text-sm text-muted-foreground mt-3">
+            <Link href="/admin/finances" className="text-primary hover:underline">
+              View finances →
+            </Link>
+          </p>
         </CardContent>
       </Card>
-
-      {/* Transactions Dialog */}
-      <Dialog
-        open={!!transactionsDialog}
-        onOpenChange={(open) => !open && setTransactionsDialog(null)}
-      >
-        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>
-              {transactionsDialog?.monthName ?? ""} Transactions
-            </DialogTitle>
-            <DialogDescription>
-              Incoming transactions that account for the total displayed
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
-            {transactionsLoading ? (
-              <div className="flex justify-center py-2">
-                <LoadingAnimation />
-              </div>
-            ) : transactions.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">No transactions</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-9">Type</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((t, i) => (
-                    <TableRow key={`${t.date}-${t.customerName}-${t.amount}-${i}`}>
-                      <TableCell>
-                        {t.type === "subscription" ? (
-                          <span title="Subscription">
-                            <Repeat
-                              className="h-4 w-4 text-muted-foreground"
-                              aria-label="Subscription"
-                            />
-                          </span>
-                        ) : (
-                          <span title="One-off invoice">
-                            <FileText
-                              className="h-4 w-4 text-muted-foreground"
-                              aria-label="One-off invoice"
-                            />
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-medium">{t.customerName}</TableCell>
-                      <TableCell>
-                        {new Date((t.dateTimestamp ?? 0) * 1000).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "2-digit",
-                          day: "2-digit",
-                          timeZone: EST,
-                        })}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        ${t.amount.toLocaleString("en-US", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Install Calendar */}
       <Card>

@@ -69,6 +69,22 @@ export function getFinancesPeriodLabel(period: FinancesPeriod): string {
   return "Year to date";
 }
 
+/** Unix bounds for past 12 months (start of month 12 months ago through now). */
+function getPast12MonthsBounds(): { start: number; end: number } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - 11, 1, 0, 0, 0, 0);
+  return {
+    start: Math.floor(start.getTime() / 1000),
+    end: Math.floor(now.getTime() / 1000),
+  };
+}
+
+/** Total gross revenue for the past 12 months (Stripe charges, payments, refunds). */
+export async function computeRevenuePast12Months(): Promise<number> {
+  const bounds = getPast12MonthsBounds();
+  return computeRevenueForDateRange(bounds.start, bounds.end);
+}
+
 /** Normalize a price's amount to monthly recurring (MRR). */
 function amountToMonthly(
   amountCents: number,

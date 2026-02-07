@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
-import { computeAdminRevenue } from "@/lib/admin-revenue";
+import {
+  computeAdminRevenue,
+  computeMRR,
+  computeRevenuePast12Months,
+} from "@/lib/admin-revenue";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +16,12 @@ export async function GET() {
   }
 
   try {
-    const data = await computeAdminRevenue();
-    return NextResponse.json(data, {
+    const [data, mrr, revenuePast12Months] = await Promise.all([
+      computeAdminRevenue(),
+      computeMRR(),
+      computeRevenuePast12Months(),
+    ]);
+    return NextResponse.json({ ...data, mrr, revenuePast12Months }, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate",
       },
