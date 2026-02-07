@@ -1,10 +1,11 @@
 /**
- * File-based store for pending customers (added by admin before sign-up).
- * Use a database in production.
+ * Store for pending customers (added by admin before sign-up).
+ * Uses Upstash Redis in production; falls back to file for local dev.
  */
 import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
+import { Redis } from "@upstash/redis";
 
 export type PendingCustomer = {
   id: string;
@@ -32,6 +33,14 @@ function combineAddress(parts: { street?: string; city?: string; state?: string;
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const FILE_PATH = path.join(DATA_DIR, "pending-customers.json");
+const REDIS_KEY = "zoomi:pending-customers";
+
+function getRedis(): Redis | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return null;
+  return new Redis({ url, token });
+}
 
 async function ensureDir() {
   try {
@@ -41,7 +50,7 @@ async function ensureDir() {
   }
 }
 
-export async function readPendingCustomers(): Promise<PendingCustomer[]> {
+async function readFileStore(): Promise<PendingCustomer[]> {
   try {
     await ensureDir();
     const raw = await readFile(FILE_PATH, "utf-8");
@@ -52,9 +61,37 @@ export async function readPendingCustomers(): Promise<PendingCustomer[]> {
   }
 }
 
-export async function writePendingCustomers(items: PendingCustomer[]): Promise<void> {
+async function writeFileStore(items: PendingCustomer[]): Promise<void> {
   await ensureDir();
   await writeFile(FILE_PATH, JSON.stringify(items, null, 2), "utf-8");
+}
+
+export async function readPendingCustomers(): Promise<PendingCustomer[]> {
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const raw = await redis.get(REDIS_KEY);
+      if (raw == null) return [];
+      const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return readFileStore();
+    }
+  }
+  return readFileStore();
+}
+
+async function writePendingCustomers(items: PendingCustomer[]): Promise<void> {
+  const redis = getRedis();
+  if (redis) {
+    try {
+      await redis.set(REDIS_KEY, JSON.stringify(items));
+      return;
+    } catch {
+      await writeFileStore(items);
+    }
+  }
+  await writeFileStore(items);
 }
 
 export type PendingCustomerInput = {

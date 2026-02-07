@@ -74,9 +74,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ pendingCustomer: item });
   } catch (err) {
     console.error("Admin add pending customer error:", err);
-    return NextResponse.json(
-      { error: "Failed to add customer" },
-      { status: 500 }
-    );
+    const msg = err instanceof Error ? err.message : "";
+    const userMessage =
+      msg.includes("EACCES") || msg.includes("EROFS") || msg.includes("ENOENT")
+        ? "Storage unavailable. Configure UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for production."
+        : "Failed to add customer";
+    return NextResponse.json({ error: userMessage }, { status: 500 });
   }
 }
