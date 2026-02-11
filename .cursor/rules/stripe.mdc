@@ -1,0 +1,48 @@
+---
+description: Stripe integration context and LLM resources for development
+globs: "**/stripe/**"
+alwaysApply: false
+---
+
+# Stripe Development Context
+
+When building or modifying Stripe integrations, use these LLM-friendly resources.
+
+## Plain text docs
+
+Access Stripe docs as plain text markdown by appending `.md` to any URL:
+
+- [https://docs.stripe.com/building-with-llms.md](https://docs.stripe.com/building-with-llms.md)
+- Any doc page: `https://docs.stripe.com/<path>.md`
+
+Benefits: fewer tokens, full content (including hidden tabs), better LLM parsing.
+
+## LLMs.txt
+
+- [https://docs.stripe.com/llms.txt.md](https://docs.stripe.com/llms.txt.md) — instructions for AI tools on retrieving plain text docs.
+- [llmstxt.org](https://llmstxt.org/) — emerging standard for LLM-accessible content.
+
+## Stripe MCP (Model Context Protocol)
+
+The Stripe MCP provides tools for AI agents to:
+
+- Interact with the Stripe API
+- Search Stripe docs and support
+
+[Connect your agent](https://docs.stripe.com/mcp.md) to the Stripe MCP server.
+
+## Stripe VS Code extension
+
+- AI Assistant for Stripe API questions and code suggestions
+- [Stripe for VS Code](https://docs.stripe.com/stripe-vscode.md)
+- Use `@stripe` in Copilot chat for Stripe-specific assistance
+
+## Stripe Agent Toolkit SDK
+
+For agentic software:
+
+- Create Stripe objects
+- Charge for agent usage
+- Compatible with OpenAI Agent SDK, Vercel AI SDK, Langchain, CrewAI
+
+[Learn more](https://docs.stripe.com/agents.md)

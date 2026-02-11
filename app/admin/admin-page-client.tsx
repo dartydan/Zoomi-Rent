@@ -1075,7 +1075,7 @@ export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRev
                     required
                     options={[
                       { value: "Standard", label: "Standard" },
-                      { value: "Plus", label: "Plus" },
+                      { value: "Premium", label: "Premium" },
                     ]}
                   />
                 </div>

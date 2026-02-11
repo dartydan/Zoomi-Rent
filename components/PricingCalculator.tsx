@@ -26,8 +26,8 @@ const plans: Plan[] = [
       "Reliable washer and dryer rental for everyday use. Includes delivery, professional installation at no cost* and generous wear coverage. Ideal for tenants who want dependable machines without unnecessary extras.",
   },
   {
-    id: "plus",
-    name: "Plus",
+    id: "premium",
+    name: "Premium",
     basePrice: 90,
     autoPayPrice: 80,
     popular: true,
@@ -37,7 +37,7 @@ const plans: Plan[] = [
 ];
 
 export function PricingCalculator() {
-  const [selectedPlan, setSelectedPlan] = useState<string>("plus");
+  const [selectedPlan, setSelectedPlan] = useState<string>("premium");
   const [useAutoPay, setUseAutoPay] = useState<boolean>(true);
   const { openGetStarted } = useGetStarted();
 

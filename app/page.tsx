@@ -17,7 +17,7 @@ function PhotoGallerySection() {
     {
       url: "/washerdryer.webp",
       alt: "Modern apartment with washer and dryer",
-      caption: "Plus units for any space"
+      caption: "Premium units for any space"
     },
     {
       url: "/install.jpg",
@@ -170,12 +170,12 @@ function CTASection() {
   );
 }
 
+// Cities within ~40 minutes drive of 47304 (Muncie)
 const FOOTER_LOCATIONS = [
-  "Muncie", "Anderson", "Yorktown", "New Castle", "Richmond", "Marion",
-  "Hartford City", "Portland", "Winchester", "Alexandria", "Pendleton",
-  "Greenfield", "Carmel", "Fishers", "Noblesville", "Westfield",
-  "Indianapolis", "Kokomo", "Tipton", "Frankfort", "Bluffton", "Decatur",
-  "Fort Wayne", "Lafayette",
+  "Muncie", "Yorktown", "Anderson", "New Castle",
+  "Hartford City", "Winchester", "Alexandria", "Portland", "Pendleton",
+  "Daleville", "Albany", "Eaton", "Parker City", "Farmland",
+  "Noblesville", "Tipton", "Greenfield", "Carmel", "Fishers", "Westfield",
 ];
 
 function MarketingFooter() {
@@ -195,7 +195,7 @@ function MarketingFooter() {
           Serving East Central Indiana: {FOOTER_LOCATIONS.join(", ")}
         </p>
         <p className="text-xs text-muted-foreground text-center sm:text-left">
-          *Installation fee of $40 is waived with a six month commitment
+          *Cancellation of the rental before completing six (6) months may be charged a $40 cancellation, removal, and redeployment fee.
         </p>
       </div>
     </footer>

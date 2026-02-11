@@ -10,6 +10,9 @@ out/
 .env.local
 .env.*.local
 
+# Local data stores (production uses Redis)
+data/*.json
+
 # Misc
 .DS_Store
 *.pem

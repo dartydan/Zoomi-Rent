@@ -1,5 +1,23 @@
 # Production Deployment Checklist
 
+## Prepare for publish
+
+Right before deploying:
+
+1. **Build and lint**
+   ```bash
+   npm run build
+   npm run lint
+   ```
+   Fix any errors before deploying.
+
+2. **Environment**  
+   Ensure all required env vars are set in your hosting provider (see below). Use **live** Stripe keys and **production** Clerk keys.
+
+3. **Optional:** Set `NEXT_PUBLIC_APP_URL` to your production URL (e.g. `https://rent.zoomi.co`) so Open Graph and social previews use the correct base URL.
+
+---
+
 ## Environment Variables (Vercel / hosting)
 
 Set these in your hosting provider's environment variables:

@@ -14,6 +14,7 @@ const nunitoSans = Nunito_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://rent.zoomi.co"),
   title: "Zoomi Rentals - Washer & Dryer Rental",
   description: "Manage your washer and dryer rental",
   openGraph: {
