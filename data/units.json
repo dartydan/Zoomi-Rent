@@ -32,5 +32,27 @@
     },
     "createdAt": "2026-02-05T05:28:39.395Z",
     "updatedAt": "2026-02-05T16:58:22.911Z"
+  },
+  {
+    "id": "5a6d33e2-bb0a-4969-8e63-9dffe09f78d5",
+    "assignedUserId": "user_38uryi2rcb7oHXcAaIjgDF8Sjgp",
+    "legacyPropertyIds": [
+      "17171e4b-7435-4e43-aa7b-91bcb1b99c0a",
+      "e36f5ced-f6ad-4e59-852f-e91d84830e05"
+    ],
+    "washer": {
+      "model": "Whirlpool Top Load XSWP39284",
+      "purchaseCost": 200,
+      "repairCosts": 0,
+      "revenueGenerated": 0
+    },
+    "dryer": {
+      "model": "Dryer Demo",
+      "purchaseCost": 100,
+      "repairCosts": 0,
+      "revenueGenerated": 0
+    },
+    "createdAt": "2026-01-31T22:32:13.744Z",
+    "updatedAt": "2026-02-01T07:45:40.883Z"
   }
 ]

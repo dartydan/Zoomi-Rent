@@ -37,6 +37,8 @@ export type MachineInfo = {
 export type Unit = {
   id: string;
   assignedUserId: string | null;
+  /** Legacy property record ids imported into this unit, used to avoid duplicate recovery imports. */
+  legacyPropertyIds?: string[];
   washer: MachineInfo;
   dryer: MachineInfo;
   createdAt: string; // ISO
