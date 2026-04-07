@@ -5,6 +5,13 @@ import { requireAdmin, requireCanEdit } from "@/lib/admin";
 import type { InstallInfo, InstallRecord } from "@/lib/install";
 import { INSTALL_METADATA_KEY } from "@/lib/install";
 import {
+  AGREEMENT_SIGNED_AT_KEY,
+  AGREEMENT_VERSION_KEY,
+  AGREEMENT_EQUIPMENT_KEY,
+  AGREEMENT_EQUIPMENT_OPTIONS,
+  isPaperAgreement,
+} from "@/lib/agreement";
+import {
   createCustomerFolder,
   uploadPhoto,
   uploadContract,
@@ -143,12 +150,30 @@ export async function GET(
         : install.installDate
           ? [{ id: "legacy", installDate: install.installDate, uninstallDate: undefined, installAddress: install.installAddress, notes: install.notes, photoUrls: install.photoUrls, contractUrls: install.contractUrls }]
           : [];
+    const rentalAgreementSignedAt = user.publicMetadata?.[AGREEMENT_SIGNED_AT_KEY] as string | undefined;
+    const rentalAgreementVersion = user.publicMetadata?.[AGREEMENT_VERSION_KEY] as string | undefined;
+    const rentalAgreementEquipment = user.publicMetadata?.[AGREEMENT_EQUIPMENT_KEY] as string | undefined;
+    const equipmentLabel =
+      rentalAgreementEquipment && rentalAgreementEquipment in AGREEMENT_EQUIPMENT_OPTIONS
+        ? `${AGREEMENT_EQUIPMENT_OPTIONS[rentalAgreementEquipment as keyof typeof AGREEMENT_EQUIPMENT_OPTIONS].label} (${AGREEMENT_EQUIPMENT_OPTIONS[rentalAgreementEquipment as keyof typeof AGREEMENT_EQUIPMENT_OPTIONS].price})`
+        : undefined;
     return NextResponse.json({
       ...install,
       installs,
       installAddress: installAddress ?? undefined,
       customerProfile: mergedProfile,
       lifetimeValue,
+      rentalAgreementSignedAt: typeof rentalAgreementSignedAt === "string" ? rentalAgreementSignedAt : undefined,
+      rentalAgreementVersion: typeof rentalAgreementVersion === "string" ? rentalAgreementVersion : undefined,
+      rentalAgreementMethod: rentalAgreementSignedAt && rentalAgreementVersion
+        ? (isPaperAgreement(rentalAgreementVersion) ? "paper" : "digital")
+        : undefined,
+      rentalAgreementEquipment:
+        typeof rentalAgreementEquipment === "string" &&
+        rentalAgreementEquipment in AGREEMENT_EQUIPMENT_OPTIONS
+          ? rentalAgreementEquipment
+          : undefined,
+      rentalAgreementEquipmentLabel: equipmentLabel ?? undefined,
     });
   } catch (err) {
     console.error("Admin get install error:", err);

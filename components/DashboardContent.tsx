@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { PaymentHistory } from "./PaymentHistory";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,13 @@ type AdminUser = {
   lastName: string | null;
 };
 
+type AgreementStatus = {
+  signed: boolean;
+  signedAt?: string;
+  version?: string;
+  method?: "digital" | "paper";
+} | null;
+
 const CUSTOMER_PORTAL_VIEW_COOKIE = "customer_portal_view";
 
 export function DashboardContent() {
@@ -59,6 +67,7 @@ export function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [agreementStatus, setAgreementStatus] = useState<AgreementStatus>(null);
   const isAdmin = isStaffRole(user?.publicMetadata?.role as string | undefined);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
 
@@ -77,6 +86,21 @@ export function DashboardContent() {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [isLoaded, isAdmin]);
+
+  useEffect(() => {
+    if (!isLoaded || !user) return;
+    let cancelled = false;
+    const agreementUrl = isAdmin && impersonateUserId
+      ? `/api/customer/agreement?userId=${encodeURIComponent(impersonateUserId)}`
+      : "/api/customer/agreement";
+    fetch(agreementUrl, { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : Promise.resolve(null)))
+      .then((body: AgreementStatus) => {
+        if (!cancelled && body) setAgreementStatus(body);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isLoaded, user, isAdmin, impersonateUserId]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -269,6 +293,21 @@ export function DashboardContent() {
   const status = data?.status ?? "scheduled";
   const { label: statusLabel, className: statusClassName } = statusConfig[status];
 
+  const signedAtFormatted =
+    agreementStatus?.signedAt &&
+    (() => {
+      try {
+        return new Date(agreementStatus.signedAt).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          timeZone: "America/New_York",
+        });
+      } catch {
+        return null;
+      }
+    })();
+
   return (
     <div className="flex min-h-full flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -355,6 +394,48 @@ export function DashboardContent() {
       )}
 
       <PaymentHistory invoices={data?.invoices || []} />
+
+      {user && (
+        <Card>
+          {searchParams.get("agreementSigned") === "1" && (
+            <p className="px-6 pt-4 text-sm text-green-700 dark:text-green-300" role="status">
+              You&apos;ve signed the rental agreement.
+            </p>
+          )}
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-medium">Rental agreement</CardTitle>
+            <CardDescription>
+              {agreementStatus?.signed
+                ? agreementStatus.method === "paper"
+                  ? "Signed on paper and on file."
+                  : "You signed the rental agreement."
+                : "Review and sign your rental agreement."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {agreementStatus?.signed ? (
+              <>
+                <p className="text-sm text-foreground">
+                  {agreementStatus.method === "paper" ? (
+                    <>Rental agreement on file{signedAtFormatted ? ` (signed on paper ${signedAtFormatted})` : ""}.</>
+                  ) : (
+                    <>You signed on {signedAtFormatted}{agreementStatus.version && agreementStatus.version !== "paper" ? ` · version ${agreementStatus.version}` : ""}.</>
+                  )}
+                </p>
+                {agreementStatus.method !== "paper" && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/dashboard/agreement">View agreement</Link>
+                  </Button>
+                )}
+              </>
+            ) : (
+              <Button asChild>
+                <Link href="/dashboard/agreement">Review and sign</Link>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mt-auto border-border bg-accent text-accent-foreground">
         <CardHeader className="pb-2">

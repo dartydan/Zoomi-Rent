@@ -49,6 +49,17 @@ type CustomerProfile = {
   selectedPlan?: string;
 } | null;
 
+type InstallPageData = InstallInfo & {
+  customerProfile?: CustomerProfile;
+  lifetimeValue?: number;
+  installs?: InstallRecord[];
+  rentalAgreementSignedAt?: string;
+  rentalAgreementVersion?: string;
+  rentalAgreementMethod?: "paper" | "digital";
+  rentalAgreementEquipment?: string;
+  rentalAgreementEquipmentLabel?: string;
+};
+
 function parseInstallAddress(s: string | undefined): { street: string; city: string; state: string; zip: string } {
   if (!s || !s.trim()) return { street: "", city: "", state: "", zip: "" };
   const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
@@ -83,7 +94,7 @@ export default function AdminUserInstallPage() {
   const router = useRouter();
   const canEdit = useCanEdit();
   const userId = params.userId as string;
-  const [data, setData] = useState<InstallInfo | null>(null);
+  const [data, setData] = useState<InstallPageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,6 +142,13 @@ export default function AdminUserInstallPage() {
   const [nameClickCaretIndex, setNameClickCaretIndex] = useState(0);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [savingName, setSavingName] = useState(false);
+  const [paperSignSaving, setPaperSignSaving] = useState(false);
+  const [paperSignDate, setPaperSignDate] = useState("");
+  const [agreementDialogOpen, setAgreementDialogOpen] = useState(false);
+  const [clearSignatureLoading, setClearSignatureLoading] = useState(false);
+  const [remindEmailSending, setRemindEmailSending] = useState(false);
+  const [remindEmailMessage, setRemindEmailMessage] = useState<"success" | "error" | null>(null);
+  const [remindEmailError, setRemindEmailError] = useState<string | null>(null);
   const [editingContactField, setEditingContactField] = useState<"email" | "phone" | "address" | null>(null);
   const [editingContactValue, setEditingContactValue] = useState("");
   const [contactClickCaretIndex, setContactClickCaretIndex] = useState(0);
@@ -159,7 +177,7 @@ export default function AdminUserInstallPage() {
       try {
         const res = await fetch(`/api/admin/users/${userId}/install`);
         if (!res.ok) throw new Error("Failed to load");
-        const json = (await res.json()) as InstallInfo & { customerProfile?: CustomerProfile; lifetimeValue?: number; installs?: InstallRecord[] };
+        const json = (await res.json()) as InstallPageData;
         if (cancelled) return;
         setData(json);
         setCustomerProfile(json.customerProfile ?? null);
@@ -707,6 +725,11 @@ export default function AdminUserInstallPage() {
               {customerProfile.selectedPlan}
             </Badge>
           )}
+          {data?.rentalAgreementEquipmentLabel && (
+            <Badge variant="outline" className="text-sm font-medium">
+              {data.rentalAgreementEquipmentLabel}
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -734,7 +757,7 @@ export default function AdminUserInstallPage() {
                     if (!res.ok) throw new Error("Failed to load");
                     return res.json();
                   })
-                  .then((json: InstallInfo & { customerProfile?: CustomerProfile; lifetimeValue?: number; installs?: InstallRecord[] }) => {
+                  .then((json: InstallPageData) => {
                     setData(json);
                     setCustomerProfile(json.customerProfile ?? null);
                     setLifetimeValue(typeof json.lifetimeValue === "number" ? json.lifetimeValue : 0);
@@ -1077,6 +1100,7 @@ export default function AdminUserInstallPage() {
               </div>
             </CardContent>
           </Card>
+
         </div>
       )}
 
@@ -1084,9 +1108,49 @@ export default function AdminUserInstallPage() {
         <Card>
           <CardHeader className="space-y-1">
             <CardTitle className="text-base">Details</CardTitle>
-            <CardDescription>Install and uninstall dates, notes, photos, and signed contracts. Files are stored in Google Drive.</CardDescription>
+            <CardDescription>Rental agreement status, install and uninstall dates, notes, photos, and signed contracts. Files are stored in Google Drive.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-foreground">Rental agreement</span>
+              <div className="flex items-center gap-2">
+                {data?.rentalAgreementSignedAt && data?.rentalAgreementVersion ? (
+                  <p className="text-sm text-foreground">
+                    {data.rentalAgreementMethod === "paper" ? (
+                      <>
+                        Paper — on file
+                        {data.rentalAgreementSignedAt && (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            (signed {parseDateForDisplay(data.rentalAgreementSignedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST })})
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        Digital — signed {parseDateForDisplay(data.rentalAgreementSignedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST })}, version {data.rentalAgreementVersion}
+                      </>
+                    )}
+                    {data?.rentalAgreementEquipmentLabel && (
+                      <span className="text-muted-foreground"> · {data.rentalAgreementEquipmentLabel}</span>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Not signed</p>
+                )}
+                {canEdit && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAgreementDialogOpen(true)}
+                  >
+                    Manage
+                  </Button>
+                )}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <span className="text-sm font-medium text-foreground">Installs</span>
               <div className="flex flex-wrap items-center gap-2">
@@ -1489,6 +1553,158 @@ export default function AdminUserInstallPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rental agreement dialog */}
+      <Dialog
+        open={agreementDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAgreementDialogOpen(false);
+            setRemindEmailMessage(null);
+            setRemindEmailError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rental agreement</DialogTitle>
+            <DialogDescription>
+              {data?.rentalAgreementSignedAt && data?.rentalAgreementVersion
+                ? data.rentalAgreementMethod === "paper"
+                  ? `Paper — on file (signed ${data.rentalAgreementSignedAt ? parseDateForDisplay(data.rentalAgreementSignedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST }) : ""}).`
+                  : `Digital — signed ${data.rentalAgreementSignedAt ? parseDateForDisplay(data.rentalAgreementSignedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: EST }) : ""}, version ${data.rentalAgreementVersion}.`
+                : "Not signed."}
+              {data?.rentalAgreementEquipmentLabel && ` Equipment: ${data.rentalAgreementEquipmentLabel}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {!data?.rentalAgreementSignedAt || !data?.rentalAgreementVersion ? (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="agreement-dialog-paper-date">Mark as signed (paper)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="agreement-dialog-paper-date"
+                      type="date"
+                      value={paperSignDate}
+                      onChange={(e) => setPaperSignDate(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      disabled={paperSignSaving}
+                      onClick={async () => {
+                        setPaperSignSaving(true);
+                        setRemindEmailMessage(null);
+                        try {
+                          const res = await fetch(`/api/admin/users/${userId}/agreement`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              paperSigned: true,
+                              ...(paperSignDate.trim() ? { signedAt: new Date(paperSignDate.trim()).toISOString() } : {}),
+                            }),
+                          });
+                          if (!res.ok) throw new Error("Failed to update");
+                          const installRes = await fetch(`/api/admin/users/${userId}/install`);
+                          if (installRes.ok) {
+                            const json = (await installRes.json()) as InstallPageData;
+                            setData(json);
+                          }
+                          setPaperSignDate("");
+                          setAgreementDialogOpen(false);
+                        } catch (e) {
+                          console.error(e);
+                        } finally {
+                          setPaperSignSaving(false);
+                        }
+                      }}
+                    >
+                      {paperSignSaving ? "Saving…" : "Mark as signed"}
+                    </Button>
+                  </div>
+                </div>
+                <div className="border-t border-border pt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={remindEmailSending}
+                    onClick={async () => {
+                      setRemindEmailSending(true);
+                      setRemindEmailMessage(null);
+                      setRemindEmailError(null);
+                      try {
+                        const res = await fetch(`/api/admin/users/${userId}/agreement/remind`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({}),
+                        });
+                        const json = (await res.json().catch(() => ({}))) as { error?: string };
+                        if (res.ok) {
+                          setRemindEmailMessage("success");
+                        } else {
+                          setRemindEmailMessage("error");
+                          setRemindEmailError(typeof json.error === "string" ? json.error : "Failed to send reminder.");
+                        }
+                      } catch (e) {
+                        setRemindEmailMessage("error");
+                        setRemindEmailError(e instanceof Error ? e.message : "Failed to send reminder.");
+                      } finally {
+                        setRemindEmailSending(false);
+                      }
+                    }}
+                  >
+                    {remindEmailSending ? "Sending…" : "Send email reminder to sign agreement online"}
+                  </Button>
+                  {remindEmailMessage === "success" && (
+                    <p className="text-sm text-green-700 dark:text-green-300 mt-2">Reminder email sent.</p>
+                  )}
+                  {remindEmailMessage === "error" && (
+                    <p className="text-sm text-destructive mt-2">{remindEmailError ?? "Failed to send. Try again."}</p>
+                  )}
+                </div>
+              </div>
+            ) : data.rentalAgreementMethod === "paper" ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={clearSignatureLoading}
+                onClick={async () => {
+                  if (!confirm("Remove paper-signed status? The customer will show as not signed.")) return;
+                  setClearSignatureLoading(true);
+                  try {
+                    const res = await fetch(`/api/admin/users/${userId}/agreement`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ clearSignature: true }),
+                    });
+                    if (!res.ok) throw new Error("Failed to update");
+                    const installRes = await fetch(`/api/admin/users/${userId}/install`);
+                    if (installRes.ok) {
+                      const json = (await installRes.json()) as InstallPageData;
+                      setData(json);
+                    }
+                    setAgreementDialogOpen(false);
+                  } catch (e) {
+                    console.error(e);
+                  } finally {
+                    setClearSignatureLoading(false);
+                  }
+                }}
+              >
+                {clearSignatureLoading ? "Removing…" : "Remove paper signed"}
+              </Button>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAgreementDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       </>

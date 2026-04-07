@@ -13,8 +13,18 @@ export default async function AdminPage() {
     computeMRR(),
     computeRevenuePast12Months(),
   ]);
-  const serialized = JSON.parse(
-    JSON.stringify({ ...revenue, mrr, revenuePast12Months })
-  );
-  return <AdminPageClient revenue={serialized} />;
+
+  // Build an explicit plain object for the client boundary.
+  const plainRevenue = {
+    lastMonthRevenue: Number(revenue?.lastMonthRevenue ?? 0),
+    lastMonthName: String(revenue?.lastMonthName ?? ""),
+    thisMonthRevenue: Number(revenue?.thisMonthRevenue ?? 0),
+    thisMonthName: String(revenue?.thisMonthName ?? ""),
+    nextMonthForecast: Number(revenue?.nextMonthForecast ?? 0),
+    nextMonthName: String(revenue?.nextMonthName ?? ""),
+    mrr: Number(mrr ?? 0),
+    revenuePast12Months: Number(revenuePast12Months ?? 0),
+  };
+
+  return <AdminPageClient revenue={plainRevenue} />;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useCanEdit } from "./can-edit-context";
 import type { AdminRevenueData } from "@/lib/admin-revenue";
@@ -14,6 +14,7 @@ import { LoadingAnimation } from "@/components/LoadingAnimation";
 import { estDateTimeToISO } from "@/lib/utils";
 import { TimeSelect, timeToNearestOption } from "@/components/TimeSelect";
 import { CustomSelect } from "@/components/ui/custom-select";
+import { InstalledUnitsMap, type InstalledUnitMapPin } from "@/components/admin/installed-units-map";
 import {
   Dialog,
   DialogContent,
@@ -289,6 +290,30 @@ export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRev
       .filter((install) => isSameDay(install.date, date))
       .sort((a, b) => a.date.getTime() - b.date.getTime());
   };
+
+  const installedPins = useMemo<InstalledUnitMapPin[]>(
+    () =>
+      installs
+        .filter(
+          (install) =>
+            install.status === "installed" &&
+            typeof install.userId === "string" &&
+            install.userId.trim().length > 0 &&
+            typeof install.unitId === "string" &&
+            install.unitId.trim().length > 0 &&
+            install.address.trim().length > 0 &&
+            install.address.trim() !== "—"
+        )
+        .map((install) => ({
+          id: `${install.id}:${install.unitId}`,
+          userId: install.userId as string,
+          unitId: install.unitId as string,
+          customerName: install.customerName,
+          address: install.address.trim(),
+          status: "installed",
+        })),
+    [installs]
+  );
 
   return (
     <div className="space-y-6">
@@ -571,6 +596,16 @@ export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRev
               );
             })}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Installed Unit Locations</CardTitle>
+          <CardDescription>Live map of currently installed units</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <InstalledUnitsMap pins={installedPins} />
         </CardContent>
       </Card>
       
