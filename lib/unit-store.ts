@@ -34,6 +34,10 @@ function getRedis(): Redis | null {
   return new Redis({ url, token });
 }
 
+function isRedisBackedStore(): boolean {
+  return getRedis() !== null;
+}
+
 async function ensureDir() {
   try {
     await mkdir(DATA_DIR, { recursive: true });
@@ -182,6 +186,9 @@ function mergeLegacyPropertiesIntoUnits(units: Unit[], legacyProperties: LegacyP
 
 async function readUnitsWithLegacyRecovery(): Promise<Unit[]> {
   const units = await readUnitsFromStore();
+  if (isRedisBackedStore()) {
+    return units;
+  }
   const legacyProperties = await readLegacyPropertiesFile();
   const recoveredUnits = mergeLegacyPropertiesIntoUnits(units, legacyProperties);
 
