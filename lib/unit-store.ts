@@ -11,6 +11,13 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const FILE_PATH = path.join(DATA_DIR, "units.json");
 const LEGACY_PROPERTIES_FILE_PATH = path.join(DATA_DIR, "properties.json");
 const REDIS_KEY = "zoomi:units";
+const LEGACY_REDIS_KEYS = [
+  "units",
+  "zoomi:properties",
+  "properties",
+  "zoomi:property",
+  "property",
+];
 
 type LegacyProperty = {
   id: string;
@@ -79,20 +86,89 @@ async function readSeedUnitsFromFiles(): Promise<Unit[]> {
   return mergeLegacyPropertiesIntoUnits(units, legacyProperties);
 }
 
+function parseStoredArray(raw: unknown): unknown[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw !== "string") return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function looksLikeUnit(value: unknown): value is Unit {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<Unit>;
+  return typeof item.id === "string" && Boolean(item.washer) && Boolean(item.dryer);
+}
+
+function looksLikeLegacyProperty(value: unknown): value is LegacyProperty {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<LegacyProperty>;
+  return typeof item.id === "string" && (
+    typeof item.model === "string" ||
+    item.unitType === "Washer" ||
+    item.unitType === "Dryer" ||
+    typeof item.assignedUserId === "string"
+  );
+}
+
+async function readRecoveryUnitsFromRedis(redis: Redis): Promise<Unit[]> {
+  const candidateKeys = new Set<string>(LEGACY_REDIS_KEYS);
+
+  try {
+    const keys = await redis.keys("*");
+    for (const key of keys) {
+      if (/unit|propert/i.test(key)) candidateKeys.add(key);
+    }
+  } catch {
+    // Some Redis-compatible providers disable KEYS. Known legacy keys above are enough for fallback.
+  }
+
+  const recoveredUnits: Unit[] = [];
+  const legacyProperties: LegacyProperty[] = [];
+  const seenUnitIds = new Set<string>();
+  const seenPropertyIds = new Set<string>();
+
+  for (const key of candidateKeys) {
+    if (key === REDIS_KEY) continue;
+    try {
+      const values = parseStoredArray(await redis.get(key));
+      for (const value of values) {
+        if (looksLikeUnit(value) && !seenUnitIds.has(value.id)) {
+          recoveredUnits.push(value);
+          seenUnitIds.add(value.id);
+        } else if (looksLikeLegacyProperty(value) && !seenPropertyIds.has(value.id)) {
+          legacyProperties.push(value);
+          seenPropertyIds.add(value.id);
+        }
+      }
+    } catch {
+      // Ignore malformed/non-inventory keys.
+    }
+  }
+
+  return mergeLegacyPropertiesIntoUnits(recoveredUnits, legacyProperties);
+}
+
 async function readUnitsFromStore(): Promise<Unit[]> {
   const redis = getRedis();
   if (redis) {
     try {
       const raw = await redis.get(REDIS_KEY);
-      if (raw == null) {
-        const seedUnits = await readSeedUnitsFromFiles();
+      const storedUnits = parseStoredArray(raw).filter(looksLikeUnit);
+      if (storedUnits.length === 0) {
+        const seedUnits = [
+          ...(await readRecoveryUnitsFromRedis(redis)),
+          ...(await readSeedUnitsFromFiles()),
+        ].filter((unit, index, all) => all.findIndex((u) => u.id === unit.id) === index);
         if (seedUnits.length > 0) {
           await redis.set(REDIS_KEY, JSON.stringify(seedUnits));
         }
         return seedUnits;
       }
-      const data = typeof raw === "string" ? JSON.parse(raw) : raw;
-      return Array.isArray(data) ? data : [];
+      return storedUnits;
     } catch {
       return [];
     }
