@@ -73,12 +73,24 @@ async function writeUnitsFile(units: Unit[]): Promise<void> {
   await writeFile(FILE_PATH, JSON.stringify(units, null, 2), "utf-8");
 }
 
+async function readSeedUnitsFromFiles(): Promise<Unit[]> {
+  const units = await readUnitsFile();
+  const legacyProperties = await readLegacyPropertiesFile();
+  return mergeLegacyPropertiesIntoUnits(units, legacyProperties);
+}
+
 async function readUnitsFromStore(): Promise<Unit[]> {
   const redis = getRedis();
   if (redis) {
     try {
       const raw = await redis.get(REDIS_KEY);
-      if (raw == null) return [];
+      if (raw == null) {
+        const seedUnits = await readSeedUnitsFromFiles();
+        if (seedUnits.length > 0) {
+          await redis.set(REDIS_KEY, JSON.stringify(seedUnits));
+        }
+        return seedUnits;
+      }
       const data = typeof raw === "string" ? JSON.parse(raw) : raw;
       return Array.isArray(data) ? data : [];
     } catch {
@@ -189,8 +201,8 @@ async function readUnitsWithLegacyRecovery(): Promise<Unit[]> {
   if (isRedisBackedStore()) {
     return units;
   }
-  const legacyProperties = await readLegacyPropertiesFile();
-  const recoveredUnits = mergeLegacyPropertiesIntoUnits(units, legacyProperties);
+
+  const recoveredUnits = await readSeedUnitsFromFiles();
 
   if (recoveredUnits.length !== units.length) {
     await writeUnitsToStore(recoveredUnits);
