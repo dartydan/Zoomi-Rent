@@ -28,11 +28,25 @@ interface Invoice {
   hostedInvoiceUrl: string | null;
 }
 
+interface OpenInvoice {
+  id: string;
+  number: string | null;
+  amountRemaining: number;
+  currency: string;
+  created: number;
+  dueDate: number | null;
+  status: string;
+  invoicePdf: string | null;
+  hostedInvoiceUrl: string | null;
+}
+
 type CustomerStatus = "scheduled" | "success" | "failed";
 
 interface DashboardData {
   customerId: string | null;
   invoices: Invoice[];
+  openInvoices: OpenInvoice[];
+  openBalance: number;
   nextPaymentDate: string | null;
   nextPaymentAmount: { amount: number; currency: string } | null;
   hasActiveSubscription: boolean;
@@ -110,6 +124,20 @@ export function DashboardContent() {
               hostedInvoiceUrl: null,
             },
           ],
+          openInvoices: [
+            {
+              id: "in_demo_open",
+              number: "INV-003",
+              amountRemaining: 6000,
+              currency: "usd",
+              created: Date.now() / 1000 - 3 * 24 * 60 * 60,
+              dueDate: Date.now() / 1000 - 2 * 24 * 60 * 60,
+              status: "open",
+              invoicePdf: null,
+              hostedInvoiceUrl: null,
+            },
+          ],
+          openBalance: 6000,
           nextPaymentDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days from now
           nextPaymentAmount: { amount: 6000, currency: "usd" },
           hasActiveSubscription: true,
@@ -141,6 +169,8 @@ export function DashboardContent() {
           setData({
             customerId: null,
             invoices: [],
+            openInvoices: [],
+            openBalance: 0,
             nextPaymentDate: null,
             nextPaymentAmount: null,
             hasActiveSubscription: false,
@@ -171,6 +201,8 @@ export function DashboardContent() {
         setData({
           customerId,
           invoices: invoicesData.invoices || [],
+          openInvoices: invoicesData.openInvoices || [],
+          openBalance: invoicesData.openBalance || 0,
           nextPaymentDate: subscriptionData.nextPaymentDate ?? null,
           nextPaymentAmount: subscriptionData.nextPaymentAmount ?? null,
           activeCouponLabel: subscriptionData.activeCouponLabel ?? null,
@@ -254,6 +286,19 @@ export function DashboardContent() {
       style: "currency",
       currency: currency.toUpperCase(),
     }).format(amount / 100);
+
+  const formatInvoiceDate = (timestamp: number | null) => {
+    if (!timestamp) return "No due date";
+    return new Date(timestamp * 1000).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      timeZone: "America/New_York",
+    });
+  };
+
+  const hasOpenInvoices = Boolean(data?.openInvoices?.length);
+  const openInvoiceCurrency = data?.openInvoices?.[0]?.currency ?? "usd";
 
   const impersonating = isAdmin && impersonateUserId;
   const impersonateUser = impersonating ? adminUsers.find((u) => u.id === impersonateUserId) : null;
@@ -350,6 +395,52 @@ export function DashboardContent() {
             <p className="text-sm text-amber-800 dark:text-amber-300">
               Contact us to set up your rental.
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {hasOpenInvoices && data && (
+        <Card className="border-2 border-amber-500/50 bg-gradient-to-br from-amber-50 to-background dark:from-amber-950/20 dark:to-background">
+          <CardHeader className="space-y-1">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-lg">Open balance</CardTitle>
+                <CardDescription>
+                  Past-due invoices that can be paid online.
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="w-fit border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+                {formatNextPaymentAmount(data.openBalance, openInvoiceCurrency)} due
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {data.openInvoices.map((invoice) => (
+              <div
+                key={invoice.id}
+                className="flex flex-col gap-3 rounded-lg border bg-background/80 p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0 space-y-1">
+                  <p className="truncate font-semibold">
+                    {invoice.number || invoice.id}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Due {formatInvoiceDate(invoice.dueDate)} · {formatNextPaymentAmount(invoice.amountRemaining, invoice.currency)} remaining
+                  </p>
+                </div>
+                {invoice.hostedInvoiceUrl ? (
+                  <Button asChild className="w-full sm:w-auto">
+                    <a href={invoice.hostedInvoiceUrl} target="_blank" rel="noopener noreferrer">
+                      Pay invoice
+                    </a>
+                  </Button>
+                ) : (
+                  <Button type="button" onClick={handleManageBilling} disabled={portalLoading} className="w-full sm:w-auto">
+                    {portalLoading ? "Opening..." : "Manage Billing"}
+                  </Button>
+                )}
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}
