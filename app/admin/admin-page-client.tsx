@@ -40,6 +40,13 @@ type Customer = {
   lastName: string | null;
 };
 
+type InventoryUnit = {
+  id: string;
+  assignedUserId?: string | null;
+  washer?: { model?: string | null };
+  dryer?: { model?: string | null };
+};
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -193,21 +200,30 @@ export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRev
   };
 
   // Inventory from units API
-  const [inventory, setInventory] = useState<{ total: number; assigned: number }>({ total: 0, assigned: 0 });
+  const [inventory, setInventory] = useState<{ total: number; assigned: number; units: InventoryUnit[] }>({ total: 0, assigned: 0, units: [] });
+  const refetchInventory = async () => {
+    try {
+      const res = await fetch("/api/admin/units", { cache: "no-store" });
+      const data = res.ok ? ((await res.json()) as { units?: InventoryUnit[] }) : { units: [] };
+      const units = data.units ?? [];
+      setInventory({
+        total: units.length,
+        assigned: units.filter((u) => u.assignedUserId).length,
+        units,
+      });
+    } catch {
+      setInventory({ total: 0, assigned: 0, units: [] });
+    }
+  };
+
   useEffect(() => {
-    let cancelled = false;
-    fetch("/api/admin/units")
-      .then((res) => res.ok ? res.json() : { units: [] })
-      .then((data: { units?: Array<{ assignedUserId?: string | null }> }) => {
-        const units = data.units ?? [];
-        if (!cancelled) setInventory({ total: units.length, assigned: units.filter((u) => u.assignedUserId).length });
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
+    refetchInventory();
   }, []);
+
   const totalInventory = inventory.total;
   const unitsRented = inventory.assigned;
   const unitsAvailable = Math.max(0, inventory.total - inventory.assigned);
+  const availableInventoryUnits = inventory.units.filter((u) => !u.assignedUserId);
   
   // Fetch customers when add dialog opens
   useEffect(() => {
@@ -902,6 +918,10 @@ export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRev
                     alert("Please select a customer.");
                     return;
                   }
+                  if (!selectedUnits) {
+                    alert("Please select the physical washer/dryer unit being installed.");
+                    return;
+                  }
                   const timeVal = (formData.get("time") as string) || "08:00";
                   const hhmmMatch = timeVal.match(/^(\d{1,2}):(\d{2})$/);
                   let hour = 8, min = 0;
@@ -933,8 +953,19 @@ export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRev
                     const data = await patchRes.json().catch(() => ({}));
                     throw new Error((data as { error?: string }).error ?? "Failed to update installation");
                   }
-                  await refetchInstalls();
-                  alert("Installation scheduled!");
+
+                  const assignRes = await fetch(`/api/admin/units/${selectedUnits}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ assignedUserId: selectedCustomerId }),
+                  });
+                  if (!assignRes.ok) {
+                    const data = await assignRes.json().catch(() => ({}));
+                    throw new Error((data as { error?: string }).error ?? "Installation saved, but unit assignment failed");
+                  }
+
+                  await Promise.all([refetchInstalls(), refetchInventory()]);
+                  alert("Installation scheduled and inventory updated!");
                 }
                 setIsAddDialogOpen(false);
                 setSelectedCustomerId("");
@@ -1070,14 +1101,23 @@ export function AdminPageClient({ revenue: initialRevenue }: { revenue: AdminRev
                     name="units"
                     value={selectedUnits}
                     onChange={setSelectedUnits}
-                    placeholder="Select unit type"
+                    placeholder="Select physical unit"
                     icon={<Package className="h-4 w-4" />}
                     required
-                    options={[
-                      { value: "Standard", label: "Standard" },
-                      { value: "Premium", label: "Premium" },
-                    ]}
+                    options={availableInventoryUnits.map((unit) => {
+                      const labelParts = [unit.washer?.model, unit.dryer?.model].filter(Boolean);
+                      const detail = labelParts.length > 0 ? ` - ${labelParts.join(" / ")}` : "";
+                      return {
+                        value: unit.id,
+                        label: `${unit.id.slice(0, 8)}${detail}`,
+                      };
+                    })}
                   />
+                  {availableInventoryUnits.length === 0 && (
+                    <p className="text-xs text-destructive">
+                      No warehouse units are available. Add or free up a unit before scheduling.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="status" className="text-sm font-medium text-foreground">

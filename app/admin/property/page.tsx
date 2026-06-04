@@ -136,6 +136,15 @@ export default function PropertyPage() {
     });
   }
 
+  async function updateUnitStatus(unitId: string, status: MachineStatus) {
+    const unit = units.find((u) => u.id === unitId);
+    if (!unit) return;
+    await patchUnit(unitId, {
+      washer: { ...unit.washer, status },
+      dryer: { ...unit.dryer, status },
+    });
+  }
+
   async function load() {
     setLoading(true);
     setError(null);
@@ -297,30 +306,21 @@ export default function PropertyPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="start">
                                 <DropdownMenuItem
-                                  onClick={() => {
-                                    updateMachineStatus(u.id, "washer", "available");
-                                    updateMachineStatus(u.id, "dryer", "available");
-                                  }}
+                                  onClick={() => updateUnitStatus(u.id, "available")}
                                   disabled={!canEdit || dotStatus === "installed"}
                                 >
                                   <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-2" />
                                   Available to install
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => {
-                                    updateMachineStatus(u.id, "washer", "needs_repair");
-                                    updateMachineStatus(u.id, "dryer", "needs_repair");
-                                  }}
+                                  onClick={() => updateUnitStatus(u.id, "needs_repair")}
                                   disabled={!canEdit}
                                 >
                                   <span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />
                                   Needs repair
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => {
-                                    updateMachineStatus(u.id, "washer", "no_longer_owned");
-                                    updateMachineStatus(u.id, "dryer", "no_longer_owned");
-                                  }}
+                                  onClick={() => updateUnitStatus(u.id, "no_longer_owned")}
                                   disabled={!canEdit}
                                 >
                                   <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-2" />
@@ -417,30 +417,21 @@ export default function PropertyPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start">
                               <DropdownMenuItem
-                                onClick={() => {
-                                  updateMachineStatus(u.id, "washer", "available");
-                                  updateMachineStatus(u.id, "dryer", "available");
-                                }}
+                                onClick={() => updateUnitStatus(u.id, "available")}
                                 disabled={!canEdit || dotStatus === "installed"}
                               >
                                 <span className="inline-block h-2 w-2 rounded-full bg-blue-500 mr-2" />
                                 Available to install
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => {
-                                  updateMachineStatus(u.id, "washer", "needs_repair");
-                                  updateMachineStatus(u.id, "dryer", "needs_repair");
-                                }}
+                                onClick={() => updateUnitStatus(u.id, "needs_repair")}
                                 disabled={!canEdit}
                               >
                                 <span className="inline-block h-2 w-2 rounded-full bg-amber-500 mr-2" />
                                 Needs repair
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => {
-                                  updateMachineStatus(u.id, "washer", "no_longer_owned");
-                                  updateMachineStatus(u.id, "dryer", "no_longer_owned");
-                                }}
+                                onClick={() => updateUnitStatus(u.id, "no_longer_owned")}
                                 disabled={!canEdit}
                               >
                                 <span className="inline-block h-2 w-2 rounded-full bg-red-500 mr-2" />
