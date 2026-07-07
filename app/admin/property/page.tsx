@@ -203,9 +203,9 @@ export default function PropertyPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Units</h1>
+          <h1 className="text-2xl font-bold text-foreground">Inventory</h1>
           <p className="text-sm text-muted-foreground">
-            Track washer/dryer pairs: location, costs, and revenue
+            Track washer/dryer units: location, costs, and revenue
           </p>
         </div>
         <Button

@@ -1643,7 +1643,7 @@ export default function AdminUserInstallPage() {
             </div>
           ) : availableUnits.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4">
-              No units available at warehouse. Add units in the Property tab first.
+              No units available at warehouse. Add units in the Inventory tab first.
             </p>
           ) : (
             <div className="space-y-2">

@@ -34,6 +34,21 @@ type LegacyProperty = {
   assignedUserId?: string | null;
 };
 
+export type UnitStoreDiagnosis = {
+  backend: "redis" | "file";
+  canonicalCount: number;
+  legacyKeyCounts: Record<string, number>;
+  fileUnitCount: number;
+  fileLegacyPropertyCount: number;
+};
+
+export type UnitRecoveryResult = {
+  previousTotal: number;
+  recovered: number;
+  total: number;
+  sources: string[];
+};
+
 function getRedis(): Redis | null {
   const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
@@ -114,16 +129,45 @@ function looksLikeLegacyProperty(value: unknown): value is LegacyProperty {
   );
 }
 
-async function readRecoveryUnitsFromRedis(redis: Redis): Promise<Unit[]> {
-  const candidateKeys = new Set<string>(LEGACY_REDIS_KEYS);
+function dedupeUnitsById(units: Unit[]): Unit[] {
+  return units.filter((unit, index, all) => all.findIndex((u) => u.id === unit.id) === index);
+}
 
-  try {
-    const keys = await redis.keys("*");
-    for (const key of keys) {
-      if (/unit|propert/i.test(key)) candidateKeys.add(key);
+function mergeUnitLists(existing: Unit[], incoming: Unit[]): { merged: Unit[]; added: number } {
+  const byId = new Map(existing.map((unit) => [unit.id, unit]));
+  let added = 0;
+  for (const unit of incoming) {
+    if (!byId.has(unit.id)) {
+      byId.set(unit.id, unit);
+      added++;
     }
-  } catch {
-    // Some Redis-compatible providers disable KEYS. Known legacy keys above are enough for fallback.
+  }
+  return { merged: Array.from(byId.values()), added };
+}
+
+type RecoveryScanResult = {
+  units: Unit[];
+  sources: string[];
+  legacyKeyCounts: Record<string, number>;
+};
+
+async function readRecoveryUnitsFromRedis(
+  redis: Redis,
+  options: { scanAllKeys?: boolean } = {}
+): Promise<RecoveryScanResult> {
+  const candidateKeys = new Set<string>(LEGACY_REDIS_KEYS);
+  const legacyKeyCounts: Record<string, number> = {};
+  const sources: string[] = [];
+
+  if (options.scanAllKeys) {
+    try {
+      const keys = await redis.keys("*");
+      for (const key of keys) {
+        if (/unit|propert/i.test(key)) candidateKeys.add(key);
+      }
+    } catch {
+      // Some Redis-compatible providers disable KEYS. Known legacy keys above are enough for fallback.
+    }
   }
 
   const recoveredUnits: Unit[] = [];
@@ -135,21 +179,54 @@ async function readRecoveryUnitsFromRedis(redis: Redis): Promise<Unit[]> {
     if (key === REDIS_KEY) continue;
     try {
       const values = parseStoredArray(await redis.get(key));
+      if (values.length === 0) continue;
+
+      legacyKeyCounts[key] = values.length;
+      let contributed = false;
+
       for (const value of values) {
         if (looksLikeUnit(value) && !seenUnitIds.has(value.id)) {
           recoveredUnits.push(value);
           seenUnitIds.add(value.id);
+          contributed = true;
         } else if (looksLikeLegacyProperty(value) && !seenPropertyIds.has(value.id)) {
           legacyProperties.push(value);
           seenPropertyIds.add(value.id);
+          contributed = true;
         }
       }
+
+      if (contributed) sources.push(key);
     } catch {
       // Ignore malformed/non-inventory keys.
     }
   }
 
-  return mergeLegacyPropertiesIntoUnits(recoveredUnits, legacyProperties);
+  const units = mergeLegacyPropertiesIntoUnits(recoveredUnits, legacyProperties);
+  if (legacyProperties.length > 0 && units.length > recoveredUnits.length) {
+    sources.push("legacy-properties-merge");
+  }
+
+  return { units, sources, legacyKeyCounts };
+}
+
+async function collectRecoveryUnits(redis: Redis | null, scanAllKeys: boolean): Promise<RecoveryScanResult> {
+  const fileUnits = await readSeedUnitsFromFiles();
+  const sources: string[] = fileUnits.length > 0 ? ["files"] : [];
+  const legacyKeyCounts: Record<string, number> = {};
+
+  if (!redis) {
+    return { units: fileUnits, sources, legacyKeyCounts };
+  }
+
+  const redisRecovery = await readRecoveryUnitsFromRedis(redis, { scanAllKeys });
+  const merged = dedupeUnitsById([...redisRecovery.units, ...fileUnits]);
+
+  return {
+    units: merged,
+    sources: [...redisRecovery.sources, ...sources],
+    legacyKeyCounts: redisRecovery.legacyKeyCounts,
+  };
 }
 
 async function readUnitsFromStore(): Promise<Unit[]> {
@@ -158,18 +235,26 @@ async function readUnitsFromStore(): Promise<Unit[]> {
     try {
       const raw = await redis.get(REDIS_KEY);
       const storedUnits = parseStoredArray(raw).filter(looksLikeUnit);
-      if (storedUnits.length === 0) {
-        const seedUnits = [
-          ...(await readRecoveryUnitsFromRedis(redis)),
-          ...(await readSeedUnitsFromFiles()),
-        ].filter((unit, index, all) => all.findIndex((u) => u.id === unit.id) === index);
-        if (seedUnits.length > 0) {
-          await redis.set(REDIS_KEY, JSON.stringify(seedUnits));
-        }
-        return seedUnits;
+      const scanAllKeys = storedUnits.length === 0;
+      const recovery = await collectRecoveryUnits(redis, scanAllKeys);
+      const { merged, added } = mergeUnitLists(storedUnits, recovery.units);
+
+      if (added > 0) {
+        console.warn(
+          `[unit-store] Recovered ${added} missing unit(s) from [${recovery.sources.join(", ")}]; ` +
+            `writing ${merged.length} total to ${REDIS_KEY} (was ${storedUnits.length})`
+        );
+        await redis.set(REDIS_KEY, JSON.stringify(merged));
+      } else if (storedUnits.length === 0 && merged.length > 0) {
+        console.warn(
+          `[unit-store] Seeded ${merged.length} unit(s) to ${REDIS_KEY} from [${recovery.sources.join(", ")}]`
+        );
+        await redis.set(REDIS_KEY, JSON.stringify(merged));
       }
-      return storedUnits;
-    } catch {
+
+      return merged;
+    } catch (err) {
+      console.error("[unit-store] Failed to read units from Redis:", err);
       return [];
     }
   }
@@ -274,17 +359,106 @@ function mergeLegacyPropertiesIntoUnits(units: Unit[], legacyProperties: LegacyP
 
 async function readUnitsWithLegacyRecovery(): Promise<Unit[]> {
   const units = await readUnitsFromStore();
-  if (isRedisBackedStore()) {
-    return units;
+  const legacyProperties = await readLegacyPropertiesFile();
+  const withLegacy = mergeLegacyPropertiesIntoUnits(units, legacyProperties);
+
+  if (withLegacy.length !== units.length) {
+    console.warn(
+      `[unit-store] Merged ${withLegacy.length - units.length} unit(s) from legacy properties file`
+    );
+    await writeUnitsToStore(withLegacy);
+    return withLegacy;
+  }
+
+  if (!isRedisBackedStore()) {
+    const recoveredUnits = await readSeedUnitsFromFiles();
+    if (recoveredUnits.length !== units.length) {
+      await writeUnitsToStore(recoveredUnits);
+      return recoveredUnits;
+    }
+  }
+
+  return units;
+}
+
+export async function diagnoseUnitsStore(): Promise<UnitStoreDiagnosis> {
+  const redis = getRedis();
+  const fileUnits = await readUnitsFile();
+  const fileLegacyProperties = await readLegacyPropertiesFile();
+
+  if (redis) {
+    try {
+      const raw = await redis.get(REDIS_KEY);
+      const canonicalCount = parseStoredArray(raw).filter(looksLikeUnit).length;
+      const recovery = await readRecoveryUnitsFromRedis(redis, { scanAllKeys: true });
+      return {
+        backend: "redis",
+        canonicalCount,
+        legacyKeyCounts: recovery.legacyKeyCounts,
+        fileUnitCount: fileUnits.length,
+        fileLegacyPropertyCount: fileLegacyProperties.length,
+      };
+    } catch {
+      return {
+        backend: "redis",
+        canonicalCount: 0,
+        legacyKeyCounts: {},
+        fileUnitCount: fileUnits.length,
+        fileLegacyPropertyCount: fileLegacyProperties.length,
+      };
+    }
+  }
+
+  return {
+    backend: "file",
+    canonicalCount: fileUnits.length,
+    legacyKeyCounts: {},
+    fileUnitCount: fileUnits.length,
+    fileLegacyPropertyCount: fileLegacyProperties.length,
+  };
+}
+
+export async function recoverUnits(): Promise<UnitRecoveryResult> {
+  const redis = getRedis();
+  const previousUnits = await readUnitsFromStore();
+  const previousTotal = previousUnits.length;
+
+  if (redis) {
+    const recovery = await collectRecoveryUnits(redis, true);
+    const { merged, added } = mergeUnitLists(previousUnits, recovery.units);
+
+    if (added > 0 || (previousTotal === 0 && merged.length > 0)) {
+      console.warn(
+        `[unit-store] Manual recovery: ${added} unit(s) added from [${recovery.sources.join(", ")}]; ` +
+          `total ${merged.length} (was ${previousTotal})`
+      );
+      await redis.set(REDIS_KEY, JSON.stringify(merged));
+    }
+
+    const withLegacy = mergeLegacyPropertiesIntoUnits(merged, await readLegacyPropertiesFile());
+    if (withLegacy.length !== merged.length) {
+      await redis.set(REDIS_KEY, JSON.stringify(withLegacy));
+    }
+
+    return {
+      previousTotal,
+      recovered: withLegacy.length - previousTotal,
+      total: withLegacy.length,
+      sources: recovery.sources,
+    };
   }
 
   const recoveredUnits = await readSeedUnitsFromFiles();
-
-  if (recoveredUnits.length !== units.length) {
+  if (recoveredUnits.length !== previousTotal) {
     await writeUnitsToStore(recoveredUnits);
   }
 
-  return recoveredUnits;
+  return {
+    previousTotal,
+    recovered: recoveredUnits.length - previousTotal,
+    total: recoveredUnits.length,
+    sources: recoveredUnits.length > 0 ? ["files"] : [],
+  };
 }
 
 export async function readUnits(): Promise<Unit[]> {
