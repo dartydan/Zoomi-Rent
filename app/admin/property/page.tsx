@@ -109,32 +109,47 @@ export default function PropertyPage() {
     total: number;
     sources: string[];
   } | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const recoveryAttempted = useRef(false);
 
   const userById = (id: string) => users.find((u) => u.id === id);
 
   async function runInventoryRecovery() {
     setRecoveryRunning(true);
-    setError(null);
+    setRecoveryError(null);
     try {
-      const diagRes = await fetch("/api/admin/units/recover", { cache: "no-store" });
+      const diagRes = await fetch("/api/admin/units/recover", {
+        cache: "no-store",
+        signal: AbortSignal.timeout(55000),
+      });
       if (!diagRes.ok) {
         const data = (await diagRes.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? "Diagnosis failed");
+        throw new Error(data.error ?? `Diagnosis failed (${diagRes.status})`);
       }
       const diagnosis = (await diagRes.json()) as NonNullable<typeof recoveryDiagnosis>;
       setRecoveryDiagnosis(diagnosis);
 
-      const recoverRes = await fetch("/api/admin/units/recover", { method: "POST" });
+      const recoverRes = await fetch("/api/admin/units/recover", {
+        method: "POST",
+        signal: AbortSignal.timeout(55000),
+      });
       if (!recoverRes.ok) {
         const data = (await recoverRes.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? "Recovery failed");
+        throw new Error(data.error ?? `Recovery failed (${recoverRes.status})`);
       }
       const result = (await recoverRes.json()) as NonNullable<typeof recoveryResult>;
       setRecoveryResult(result);
-      await load();
+      await loadUnitsOnly();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Inventory recovery failed");
+      if (e instanceof Error && e.name === "TimeoutError") {
+        setRecoveryError("Recovery timed out. Try again — it may still be running on the server.");
+      } else if (e instanceof TypeError && e.message === "Failed to fetch") {
+        setRecoveryError(
+          "Could not reach the recovery API. If this persists, the server may have timed out — try again in a moment."
+        );
+      } else {
+        setRecoveryError(e instanceof Error ? e.message : "Inventory recovery failed");
+      }
     } finally {
       setRecoveryRunning(false);
     }
@@ -188,6 +203,16 @@ export default function PropertyPage() {
     });
   }
 
+  async function loadUnitsOnly() {
+    const unitsRes = await fetch("/api/admin/units", { cache: "no-store" });
+    if (!unitsRes.ok) {
+      const msg = (await unitsRes.json().catch(() => ({})) as { error?: string }).error;
+      throw new Error(msg || "Failed to load units");
+    }
+    const unitsData = (await unitsRes.json()) as { units?: Unit[] };
+    setUnits(unitsData.units ?? []);
+  }
+
   async function load() {
     setLoading(true);
     setError(null);
@@ -227,10 +252,10 @@ export default function PropertyPage() {
   }, []);
 
   useEffect(() => {
-    if (!canEdit || recoveryAttempted.current) return;
+    if (!canEdit || loading || recoveryAttempted.current) return;
     recoveryAttempted.current = true;
     void runInventoryRecovery();
-  }, [canEdit]);
+  }, [canEdit, loading]);
 
   function totalRevenue(u: Unit) {
     return (u.washer.revenueGenerated ?? 0) + (u.dryer.revenueGenerated ?? 0);
@@ -294,7 +319,7 @@ export default function PropertyPage() {
         </p>
       )}
 
-      {(recoveryRunning || recoveryDiagnosis || recoveryResult) && (
+      {(recoveryRunning || recoveryDiagnosis || recoveryResult || recoveryError) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Inventory recovery</CardTitle>
@@ -305,6 +330,11 @@ export default function PropertyPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
+            {recoveryError && (
+              <p className="text-destructive" role="alert">
+                {recoveryError}
+              </p>
+            )}
             {recoveryDiagnosis && (
               <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>

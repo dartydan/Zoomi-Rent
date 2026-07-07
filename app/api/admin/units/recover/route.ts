@@ -3,6 +3,7 @@ import { requireAdmin, requireCanEdit } from "@/lib/admin";
 import { diagnoseUnitsStore, recoverUnits } from "@/lib/unit-store";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function authorizedByRecoverySecret(req: NextRequest): boolean {
   const secret = process.env.UNITS_RECOVERY_SECRET?.trim();
