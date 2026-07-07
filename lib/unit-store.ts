@@ -22,6 +22,7 @@ const LEGACY_REDIS_KEYS = [
 type LegacyProperty = {
   id: string;
   model?: string;
+  name?: string;
   unitType?: "Washer" | "Dryer";
   purchaseCost?: number;
   repairCosts?: number;
@@ -37,9 +38,13 @@ type LegacyProperty = {
 export type UnitStoreDiagnosis = {
   backend: "redis" | "file";
   canonicalCount: number;
+  canonicalRawCount: number;
+  recoveryCandidateCount: number;
+  assignedCount: number;
   legacyKeyCounts: Record<string, number>;
   fileUnitCount: number;
   fileLegacyPropertyCount: number;
+  airtableConfigured: boolean;
 };
 
 export type UnitRecoveryResult = {
@@ -72,8 +77,8 @@ async function readUnitsFile(): Promise<Unit[]> {
   try {
     await ensureDir();
     const raw = await readFile(FILE_PATH, "utf-8");
-    const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : [];
+    const { units } = partitionStoredRecords(parseStoredRecords(JSON.parse(raw)));
+    return units;
   } catch {
     return [];
   }
@@ -83,8 +88,8 @@ async function readLegacyPropertiesFile(): Promise<LegacyProperty[]> {
   try {
     await ensureDir();
     const raw = await readFile(LEGACY_PROPERTIES_FILE_PATH, "utf-8");
-    const data = JSON.parse(raw);
-    return Array.isArray(data) ? data : [];
+    const { legacyProperties } = partitionStoredRecords(parseStoredRecords(JSON.parse(raw)));
+    return legacyProperties;
   } catch {
     return [];
   }
@@ -101,15 +106,139 @@ async function readSeedUnitsFromFiles(): Promise<Unit[]> {
   return mergeLegacyPropertiesIntoUnits(units, legacyProperties);
 }
 
-function parseStoredArray(raw: unknown): unknown[] {
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw !== "string") return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+function parseStoredRecords(raw: unknown): unknown[] {
+  if (raw == null) return [];
+
+  let parsed: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return [];
+    }
   }
+
+  if (Array.isArray(parsed)) return parsed;
+
+  if (!parsed || typeof parsed !== "object") return [];
+
+  const obj = parsed as Record<string, unknown>;
+  for (const key of ["units", "properties", "records", "items", "data"]) {
+    const inner = obj[key];
+    if (Array.isArray(inner)) return inner;
+  }
+
+  if (Array.isArray(obj.records)) {
+    return obj.records.map((record) => {
+      if (!record || typeof record !== "object") return record;
+      const rec = record as { id?: string; fields?: Record<string, unknown>; createdTime?: string };
+      if (!rec.fields || typeof rec.fields !== "object") return record;
+      return {
+        id: rec.id,
+        createdTime: rec.createdTime,
+        ...rec.fields,
+      };
+    });
+  }
+
+  const values = Object.values(obj);
+  if (
+    values.length > 0 &&
+    values.every((value) => value && typeof value === "object" && typeof (value as { id?: string }).id === "string")
+  ) {
+    return values;
+  }
+
+  return [];
+}
+
+/** @deprecated Use parseStoredRecords */
+function parseStoredArray(raw: unknown): unknown[] {
+  return parseStoredRecords(raw);
+}
+
+function normalizeLegacyProperty(value: LegacyProperty): LegacyProperty {
+  return {
+    ...value,
+    model: value.model ?? value.name,
+  };
+}
+
+function normalizeUnit(value: Unit): Unit {
+  return {
+    ...value,
+    washer: value.washer ?? emptyMachine(),
+    dryer: value.dryer ?? emptyMachine(),
+  };
+}
+
+function coercePartialUnit(value: unknown): Unit | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Partial<Unit> & {
+    assigned_user_id?: string | null;
+    washer_model?: string;
+    dryer_model?: string;
+    washer_brand?: string;
+    dryer_brand?: string;
+  };
+  if (typeof item.id !== "string") return null;
+
+  if (looksLikeUnit(value)) return normalizeUnit(value as Unit);
+
+  const washer = item.washer ?? (item.washer_model || item.washer_brand
+    ? {
+        ...emptyMachine(),
+        model: item.washer_model,
+        brand: item.washer_brand,
+      }
+    : undefined);
+  const dryer = item.dryer ?? (item.dryer_model || item.dryer_brand
+    ? {
+        ...emptyMachine(),
+        model: item.dryer_model,
+        brand: item.dryer_brand,
+      }
+    : undefined);
+
+  if (!washer && !dryer) return null;
+
+  const assignedUserId =
+    item.assignedUserId ??
+    (typeof item.assigned_user_id === "string" ? item.assigned_user_id : null);
+
+  return normalizeUnit({
+    id: item.id,
+    assignedUserId: assignedUserId ?? null,
+    legacyPropertyIds: item.legacyPropertyIds,
+    washer: washer ?? emptyMachine(),
+    dryer: dryer ?? emptyMachine(),
+    createdAt: item.createdAt ?? new Date().toISOString(),
+    updatedAt: item.updatedAt ?? item.createdAt ?? new Date().toISOString(),
+  });
+}
+
+function partitionStoredRecords(values: unknown[]): { units: Unit[]; legacyProperties: LegacyProperty[] } {
+  const units: Unit[] = [];
+  const legacyProperties: LegacyProperty[] = [];
+
+  for (const value of values) {
+    if (looksLikeUnit(value)) {
+      units.push(normalizeUnit(value));
+      continue;
+    }
+
+    const coerced = coercePartialUnit(value);
+    if (coerced) {
+      units.push(coerced);
+      continue;
+    }
+
+    if (looksLikeLegacyProperty(value)) {
+      legacyProperties.push(normalizeLegacyProperty(value as LegacyProperty));
+    }
+  }
+
+  return { units, legacyProperties };
 }
 
 function looksLikeUnit(value: unknown): value is Unit {
@@ -120,9 +249,10 @@ function looksLikeUnit(value: unknown): value is Unit {
 
 function looksLikeLegacyProperty(value: unknown): value is LegacyProperty {
   if (!value || typeof value !== "object") return false;
-  const item = value as Partial<LegacyProperty>;
+  const item = value as Partial<LegacyProperty> & { name?: string };
   return typeof item.id === "string" && (
     typeof item.model === "string" ||
+    typeof item.name === "string" ||
     item.unitType === "Washer" ||
     item.unitType === "Dryer" ||
     typeof item.assignedUserId === "string"
@@ -178,20 +308,25 @@ async function readRecoveryUnitsFromRedis(
   for (const key of candidateKeys) {
     if (key === REDIS_KEY) continue;
     try {
-      const values = parseStoredArray(await redis.get(key));
+      const values = parseStoredRecords(await redis.get(key));
       if (values.length === 0) continue;
 
       legacyKeyCounts[key] = values.length;
       let contributed = false;
+      const { units: keyUnits, legacyProperties: keyLegacy } = partitionStoredRecords(values);
 
-      for (const value of values) {
-        if (looksLikeUnit(value) && !seenUnitIds.has(value.id)) {
-          recoveredUnits.push(value);
-          seenUnitIds.add(value.id);
+      for (const unit of keyUnits) {
+        if (!seenUnitIds.has(unit.id)) {
+          recoveredUnits.push(unit);
+          seenUnitIds.add(unit.id);
           contributed = true;
-        } else if (looksLikeLegacyProperty(value) && !seenPropertyIds.has(value.id)) {
-          legacyProperties.push(value);
-          seenPropertyIds.add(value.id);
+        }
+      }
+
+      for (const property of keyLegacy) {
+        if (!seenPropertyIds.has(property.id)) {
+          legacyProperties.push(property);
+          seenPropertyIds.add(property.id);
           contributed = true;
         }
       }
@@ -210,17 +345,84 @@ async function readRecoveryUnitsFromRedis(
   return { units, sources, legacyKeyCounts };
 }
 
+async function readRecoveryUnitsFromAirtable(): Promise<Unit[]> {
+  const apiKey = process.env.AIRTABLE_API_KEY;
+  const baseId = process.env.AIRTABLE_BASE_ID?.trim();
+  const table = encodeURIComponent((process.env.AIRTABLE_TABLE ?? "Units").trim());
+  if (!apiKey || !baseId) return [];
+
+  const units: Unit[] = [];
+  let offset: string | undefined;
+
+  try {
+    do {
+      const query = offset ? `?offset=${encodeURIComponent(offset)}` : "";
+      const res = await fetch(`https://api.airtable.com/v0/${baseId}/${table}${query}`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) return units;
+
+      const data = (await res.json()) as {
+        records?: Array<{ id: string; createdTime?: string; fields: Record<string, unknown> }>;
+        offset?: string;
+      };
+
+      for (const record of data.records ?? []) {
+        const coerced = coercePartialUnit({
+          id: record.id,
+          createdAt: record.createdTime,
+          assigned_user_id: record.fields.assigned_user_id,
+          washer_model: record.fields.washer_model,
+          washer_brand: record.fields.washer_brand,
+          dryer_model: record.fields.dryer_model,
+          dryer_brand: record.fields.dryer_brand,
+          washer: {
+            model: record.fields.washer_model,
+            brand: record.fields.washer_brand,
+            purchaseCost: Number(record.fields.unit_acquisition_cost ?? 0),
+            repairCosts: Number(record.fields.additional_costs ?? 0),
+            acquisitionSource: record.fields.acquisition_location,
+            revenueGenerated: Number(record.fields.unit_revenue ?? 0) / 2,
+          },
+          dryer: {
+            model: record.fields.dryer_model,
+            brand: record.fields.dryer_brand,
+            purchaseCost: 0,
+            repairCosts: 0,
+            acquisitionSource: record.fields.acquisition_location,
+            revenueGenerated: Number(record.fields.unit_revenue ?? 0) / 2,
+          },
+        });
+        if (coerced) units.push(coerced);
+      }
+
+      offset = data.offset;
+    } while (offset);
+  } catch (err) {
+    console.warn("[unit-store] Airtable recovery failed:", err);
+  }
+
+  return units;
+}
+
 async function collectRecoveryUnits(redis: Redis | null, scanAllKeys: boolean): Promise<RecoveryScanResult> {
   const fileUnits = await readSeedUnitsFromFiles();
   const sources: string[] = fileUnits.length > 0 ? ["files"] : [];
   const legacyKeyCounts: Record<string, number> = {};
 
+  const airtableUnits = await readRecoveryUnitsFromAirtable();
+  if (airtableUnits.length > 0) sources.push("airtable");
+
   if (!redis) {
-    return { units: fileUnits, sources, legacyKeyCounts };
+    return {
+      units: dedupeUnitsById([...airtableUnits, ...fileUnits]),
+      sources,
+      legacyKeyCounts,
+    };
   }
 
   const redisRecovery = await readRecoveryUnitsFromRedis(redis, { scanAllKeys });
-  const merged = dedupeUnitsById([...redisRecovery.units, ...fileUnits]);
+  const merged = dedupeUnitsById([...redisRecovery.units, ...airtableUnits, ...fileUnits]);
 
   return {
     units: merged,
@@ -234,20 +436,19 @@ async function readUnitsFromStore(): Promise<Unit[]> {
   if (redis) {
     try {
       const raw = await redis.get(REDIS_KEY);
-      const storedUnits = parseStoredArray(raw).filter(looksLikeUnit);
-      const scanAllKeys = storedUnits.length === 0;
-      const recovery = await collectRecoveryUnits(redis, scanAllKeys);
-      const { merged, added } = mergeUnitLists(storedUnits, recovery.units);
+      const canonicalRecords = parseStoredRecords(raw);
+      const { units: storedUnits, legacyProperties: inlineLegacy } = partitionStoredRecords(canonicalRecords);
+      const storedWithInlineLegacy = mergeLegacyPropertiesIntoUnits(storedUnits, inlineLegacy);
 
-      if (added > 0) {
+      const recovery = await collectRecoveryUnits(redis, true);
+      const { merged, added } = mergeUnitLists(storedWithInlineLegacy, recovery.units);
+      const grewFromInlineLegacy = storedWithInlineLegacy.length > storedUnits.length;
+
+      if (added > 0 || grewFromInlineLegacy || (storedWithInlineLegacy.length === 0 && merged.length > 0)) {
         console.warn(
-          `[unit-store] Recovered ${added} missing unit(s) from [${recovery.sources.join(", ")}]; ` +
-            `writing ${merged.length} total to ${REDIS_KEY} (was ${storedUnits.length})`
-        );
-        await redis.set(REDIS_KEY, JSON.stringify(merged));
-      } else if (storedUnits.length === 0 && merged.length > 0) {
-        console.warn(
-          `[unit-store] Seeded ${merged.length} unit(s) to ${REDIS_KEY} from [${recovery.sources.join(", ")}]`
+          `[unit-store] Recovered inventory: ${merged.length} total unit(s) ` +
+            `(canonical ${storedUnits.length}, inline-legacy +${storedWithInlineLegacy.length - storedUnits.length}, ` +
+            `external +${added}) from [${recovery.sources.join(", ")}]`
         );
         await redis.set(REDIS_KEY, JSON.stringify(merged));
       }
@@ -287,14 +488,15 @@ function normalizeLegacyType(value: LegacyProperty["unitType"]): "Washer" | "Dry
 }
 
 function buildMachineFromLegacy(property: LegacyProperty) {
+  const normalized = normalizeLegacyProperty(property);
   return {
-    model: property.model,
-    purchaseCost: property.purchaseCost ?? 0,
-    repairCosts: property.repairCosts ?? 0,
-    acquisitionSource: property.acquisitionSource,
-    revenueGenerated: property.revenueGenerated ?? 0,
-    notes: property.notes,
-    status: property.status,
+    model: normalized.model,
+    purchaseCost: normalized.purchaseCost ?? 0,
+    repairCosts: normalized.repairCosts ?? 0,
+    acquisitionSource: normalized.acquisitionSource,
+    revenueGenerated: normalized.revenueGenerated ?? 0,
+    notes: normalized.notes,
+    status: normalized.status,
   };
 }
 
@@ -385,36 +587,57 @@ export async function diagnoseUnitsStore(): Promise<UnitStoreDiagnosis> {
   const redis = getRedis();
   const fileUnits = await readUnitsFile();
   const fileLegacyProperties = await readLegacyPropertiesFile();
+  const airtableConfigured = Boolean(
+    process.env.AIRTABLE_API_KEY && process.env.AIRTABLE_BASE_ID?.trim()
+  );
 
   if (redis) {
     try {
       const raw = await redis.get(REDIS_KEY);
-      const canonicalCount = parseStoredArray(raw).filter(looksLikeUnit).length;
+      const canonicalRecords = parseStoredRecords(raw);
+      const { units: canonicalUnits } = partitionStoredRecords(canonicalRecords);
       const recovery = await readRecoveryUnitsFromRedis(redis, { scanAllKeys: true });
+      const airtableUnits = await readRecoveryUnitsFromAirtable();
+      const candidates = dedupeUnitsById([...recovery.units, ...airtableUnits, ...fileUnits]);
+      const assignedCount = candidates.filter((unit) => unit.assignedUserId).length;
+
       return {
         backend: "redis",
-        canonicalCount,
+        canonicalCount: canonicalUnits.length,
+        canonicalRawCount: canonicalRecords.length,
+        recoveryCandidateCount: candidates.length,
+        assignedCount,
         legacyKeyCounts: recovery.legacyKeyCounts,
         fileUnitCount: fileUnits.length,
         fileLegacyPropertyCount: fileLegacyProperties.length,
+        airtableConfigured,
       };
     } catch {
       return {
         backend: "redis",
         canonicalCount: 0,
+        canonicalRawCount: 0,
+        recoveryCandidateCount: 0,
+        assignedCount: 0,
         legacyKeyCounts: {},
         fileUnitCount: fileUnits.length,
         fileLegacyPropertyCount: fileLegacyProperties.length,
+        airtableConfigured,
       };
     }
   }
 
+  const assignedCount = fileUnits.filter((unit) => unit.assignedUserId).length;
   return {
     backend: "file",
     canonicalCount: fileUnits.length,
+    canonicalRawCount: fileUnits.length,
+    recoveryCandidateCount: fileUnits.length,
+    assignedCount,
     legacyKeyCounts: {},
     fileUnitCount: fileUnits.length,
     fileLegacyPropertyCount: fileLegacyProperties.length,
+    airtableConfigured,
   };
 }
 
