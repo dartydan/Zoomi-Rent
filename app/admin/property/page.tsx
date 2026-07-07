@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useCanEdit } from "../can-edit-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,8 +94,66 @@ export default function PropertyPage() {
   const [deleteTarget, setDeleteTarget] = useState<Unit | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [recoveryRunning, setRecoveryRunning] = useState(false);
+  const [recoveryDiagnosis, setRecoveryDiagnosis] = useState<{
+    backend: string;
+    canonicalCount: number;
+    canonicalRawCount: number;
+    recoveryCandidateCount: number;
+    assignedCount: number;
+    legacyKeyCounts: Record<string, number>;
+  } | null>(null);
+  const [recoveryResult, setRecoveryResult] = useState<{
+    previousTotal: number;
+    recovered: number;
+    total: number;
+    sources: string[];
+  } | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const recoveryAttempted = useRef(false);
 
   const userById = (id: string) => users.find((u) => u.id === id);
+
+  async function runInventoryRecovery() {
+    setRecoveryRunning(true);
+    setRecoveryError(null);
+    try {
+      const diagRes = await fetch("/api/admin/units/recover", {
+        cache: "no-store",
+        signal: AbortSignal.timeout(55000),
+      });
+      if (!diagRes.ok) {
+        const data = (await diagRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? `Diagnosis failed (${diagRes.status})`);
+      }
+      const diagnosis = (await diagRes.json()) as NonNullable<typeof recoveryDiagnosis>;
+      setRecoveryDiagnosis(diagnosis);
+
+      const recoverRes = await fetch("/api/admin/units/recover", {
+        method: "POST",
+        signal: AbortSignal.timeout(55000),
+      });
+      if (!recoverRes.ok) {
+        const data = (await recoverRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? `Recovery failed (${recoverRes.status})`);
+      }
+      const result = (await recoverRes.json()) as NonNullable<typeof recoveryResult>;
+      setRecoveryResult(result);
+      await loadUnitsOnly();
+    } catch (e) {
+      if (e instanceof Error && e.name === "TimeoutError") {
+        setRecoveryError("Recovery timed out. Try again — it may still be running on the server.");
+      } else if (e instanceof TypeError && e.message === "Failed to fetch") {
+        setRecoveryError(
+          "Could not reach the recovery API. If this persists, the server may have timed out — try again in a moment."
+        );
+      } else {
+        setRecoveryError(e instanceof Error ? e.message : "Inventory recovery failed");
+      }
+    } finally {
+      setRecoveryRunning(false);
+    }
+  }
 
   async function patchUnit(
     unitId: string,
@@ -145,6 +203,16 @@ export default function PropertyPage() {
     });
   }
 
+  async function loadUnitsOnly() {
+    const unitsRes = await fetch("/api/admin/units", { cache: "no-store" });
+    if (!unitsRes.ok) {
+      const msg = (await unitsRes.json().catch(() => ({})) as { error?: string }).error;
+      throw new Error(msg || "Failed to load units");
+    }
+    const unitsData = (await unitsRes.json()) as { units?: Unit[] };
+    setUnits(unitsData.units ?? []);
+  }
+
   async function load() {
     setLoading(true);
     setError(null);
@@ -182,6 +250,12 @@ export default function PropertyPage() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (!canEdit || loading || recoveryAttempted.current) return;
+    recoveryAttempted.current = true;
+    void runInventoryRecovery();
+  }, [canEdit, loading]);
 
   function totalRevenue(u: Unit) {
     return (u.washer.revenueGenerated ?? 0) + (u.dryer.revenueGenerated ?? 0);
@@ -243,6 +317,59 @@ export default function PropertyPage() {
         <p className="text-sm text-destructive" role="alert">
           {error}
         </p>
+      )}
+
+      {(recoveryRunning || recoveryDiagnosis || recoveryResult || recoveryError) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Inventory recovery</CardTitle>
+            <CardDescription>
+              {recoveryRunning
+                ? "Running diagnosis and recovery…"
+                : "Checked legacy Redis keys and merged missing units into inventory."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {recoveryError && (
+              <p className="text-destructive" role="alert">
+                {recoveryError}
+              </p>
+            )}
+            {recoveryDiagnosis && (
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <dt className="text-muted-foreground">In store</dt>
+                  <dd className="font-medium tabular-nums">{recoveryDiagnosis.canonicalCount}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Raw records</dt>
+                  <dd className="font-medium tabular-nums">{recoveryDiagnosis.canonicalRawCount}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Recoverable</dt>
+                  <dd className="font-medium tabular-nums">{recoveryDiagnosis.recoveryCandidateCount}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">Assigned</dt>
+                  <dd className="font-medium tabular-nums">{recoveryDiagnosis.assignedCount}</dd>
+                </div>
+              </dl>
+            )}
+            {recoveryResult && (
+              <p className="text-muted-foreground">
+                Recovery result: {recoveryResult.total} total units
+                {recoveryResult.recovered > 0
+                  ? ` (+${recoveryResult.recovered} restored from ${recoveryResult.sources.join(", ") || "sources"})`
+                  : " (no new units found)"}
+              </p>
+            )}
+            {canEdit && !recoveryRunning && (
+              <Button type="button" variant="outline" size="sm" onClick={() => void runInventoryRecovery()}>
+                Run again
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       <Card>

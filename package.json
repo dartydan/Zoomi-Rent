@@ -9,7 +9,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "units:recover": "tsx scripts/units-recover.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^5.7.0",

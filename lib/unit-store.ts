@@ -440,7 +440,7 @@ async function readUnitsFromStore(): Promise<Unit[]> {
       const { units: storedUnits, legacyProperties: inlineLegacy } = partitionStoredRecords(canonicalRecords);
       const storedWithInlineLegacy = mergeLegacyPropertiesIntoUnits(storedUnits, inlineLegacy);
 
-      const recovery = await collectRecoveryUnits(redis, true);
+      const recovery = await collectRecoveryUnits(redis, false);
       const { merged, added } = mergeUnitLists(storedWithInlineLegacy, recovery.units);
       const grewFromInlineLegacy = storedWithInlineLegacy.length > storedUnits.length;
 
@@ -596,7 +596,7 @@ export async function diagnoseUnitsStore(): Promise<UnitStoreDiagnosis> {
       const raw = await redis.get(REDIS_KEY);
       const canonicalRecords = parseStoredRecords(raw);
       const { units: canonicalUnits } = partitionStoredRecords(canonicalRecords);
-      const recovery = await readRecoveryUnitsFromRedis(redis, { scanAllKeys: true });
+      const recovery = await readRecoveryUnitsFromRedis(redis, { scanAllKeys: false });
       const airtableUnits = await readRecoveryUnitsFromAirtable();
       const candidates = dedupeUnitsById([...recovery.units, ...airtableUnits, ...fileUnits]);
       const assignedCount = candidates.filter((unit) => unit.assignedUserId).length;
