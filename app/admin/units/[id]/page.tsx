@@ -300,7 +300,7 @@ export default function UnitDetailsPage() {
     return (
       <div className="space-y-4">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/property">← Back to Units</Link>
+          <Link href="/admin/property">← Back to Inventory</Link>
         </Button>
         <p className="text-sm text-destructive" role="alert">
           {error}
@@ -361,7 +361,7 @@ export default function UnitDetailsPage() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/admin/property" className="text-primary w-fit">
-              ← Back to Units
+              ← Back to Inventory
             </Link>
           </Button>
           <div className="flex items-center gap-3">

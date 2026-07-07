@@ -56,7 +56,7 @@ export function AppSidebar() {
     const adminNavItems = [
       { title: "Overview", href: "/admin", icon: Home },
       { title: "Customers", href: "/admin/users", icon: Users },
-      { title: "Property", href: "/admin/property", icon: Building },
+      { title: "Inventory", href: "/admin/property", icon: Building },
       { title: "Finances", href: "/admin/finances", icon: DollarSign },
       { title: "Analytics", href: "/admin/analytics", icon: BarChart3 },
     ];
